@@ -1,0 +1,5 @@
+# Claude Code ignore patterns
+node_modules/
+*.jsonl
+.env
+.env.*

@@ -1,0 +1,33 @@
+[2026-05-02 14:15:53] Backed up: Skyrim.ini
+[2026-05-02 14:15:53] Injected MO2 INI: Skyrim.ini
+[2026-05-02 14:15:53] State: INJECTED written.
+[2026-05-02 14:15:53] Backed up AppData: plugins.txt
+[2026-05-02 14:15:53] Injected AppData: plugins.txt
+[2026-05-02 14:15:53] State: INJECTED updated with AppData pairs.
+[2026-05-02 14:15:53] Launching: i:\Works\005_MO2_Hardlink_Builder_V4b\scratch\wrapper_test\standalone\_test_game_original.exe [test_game]
+[2026-05-02 14:15:57] Loader/Launcher exited. Code: 0
+[2026-05-02 14:15:57] Detected game process: test_game. Waiting for it to exit...
+[2026-05-02 14:16:21] Recovery: found state=INJECTED
+[2026-05-02 14:16:21] Recovery: restored INI Skyrim.ini
+[2026-05-02 14:16:21] Recovery: restored AppData plugins.txt
+[2026-05-02 14:16:21] Recovery complete.
+[2026-05-02 14:16:21] Backed up: Skyrim.ini
+[2026-05-02 14:16:21] Injected MO2 INI: Skyrim.ini
+[2026-05-02 14:16:21] State: INJECTED written.
+[2026-05-02 14:16:21] Backed up AppData: plugins.txt
+[2026-05-02 14:16:21] Injected AppData: plugins.txt
+[2026-05-02 14:16:21] State: INJECTED updated with AppData pairs.
+[2026-05-02 14:16:21] Launching: i:\Works\005_MO2_Hardlink_Builder_V4b\scratch\wrapper_test\standalone\_test_game_original.exe [test_game]
+[2026-05-02 14:16:23] Recovery: found state=INJECTED
+[2026-05-02 14:16:23] Recovery: restored INI Skyrim.ini
+[2026-05-02 14:16:23] Recovery: restored AppData plugins.txt
+[2026-05-02 14:16:23] Recovery complete.
+[2026-05-02 14:16:23] Backed up: Skyrim.ini
+[2026-05-02 14:16:23] Injected MO2 INI: Skyrim.ini
+[2026-05-02 14:16:23] State: INJECTED written.
+[2026-05-02 14:16:23] Backed up AppData: plugins.txt
+[2026-05-02 14:16:23] Injected AppData: plugins.txt
+[2026-05-02 14:16:23] State: INJECTED updated with AppData pairs.
+[2026-05-02 14:16:23] Launching: i:\Works\005_MO2_Hardlink_Builder_V4b\scratch\wrapper_test\standalone\_test_game_original.exe [test_game]
+[2026-05-02 14:16:25] Loader/Launcher exited. Code: 0
+[2026-05-02 14:16:25] Detected game process: test_game. Waiting for it to exit...

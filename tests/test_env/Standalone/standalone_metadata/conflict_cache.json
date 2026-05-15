@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "data": {
+    "data/file1.txt": [
+      "ModA",
+      "ModB"
+    ],
+    "data/file2.txt": [
+      "ModA"
+    ],
+    "data/file4.txt": [
+      "ModB"
+    ],
+    "data/file3.txt": [
+      "ModA"
+    ]
+  }
+}

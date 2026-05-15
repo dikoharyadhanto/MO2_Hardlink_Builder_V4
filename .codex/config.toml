@@ -1,0 +1,23 @@
+[mcp_servers.memory]
+args = [
+    "/c",
+    "npx",
+    "-y",
+    "@modelcontextprotocol/server-memory",
+]
+command = "cmd"
+
+[mcp_servers.memory.env]
+MEMORY_FILE_PATH = "C:\\Users\\dikoh\\.delta\\memory_delta.jsonl"
+
+[mcp_servers.sequential-thinking]
+args = [
+    "/c",
+    "npx",
+    "-y",
+    "@modelcontextprotocol/server-sequential-thinking",
+]
+command = "cmd"
+
+[mcp_servers.sequential-thinking.tools.sequentialthinking]
+approval_mode = "approve"

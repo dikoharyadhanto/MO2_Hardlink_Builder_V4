@@ -1,0 +1,34 @@
+{
+    "version": 3,
+    "mapping": {
+        "data/file1.txt": {
+            "source": "\\\\?\\i:\\Works\\005_MO2_Hardlink_Builder_V4b\\scratch\\test_env\\MO2\\mods\\ModB\\Data\\file1.txt",
+            "mod_origin": "ModB",
+            "is_root": false,
+            "size_bytes": 15,
+            "mtime": 1777968818.397783,
+            "preferred_path": "Data\\file1.txt"
+        },
+        "data/file3.txt": {
+            "source": "\\\\?\\i:\\Works\\005_MO2_Hardlink_Builder_V4b\\scratch\\test_env\\MO2\\mods\\ModA\\Data\\file3.txt",
+            "mod_origin": "ModA",
+            "is_root": false,
+            "size_bytes": 16,
+            "mtime": 1777968818.4247053,
+            "preferred_path": "Data\\file3.txt"
+        },
+        "data/file4.txt": {
+            "source": "\\\\?\\i:\\Works\\005_MO2_Hardlink_Builder_V4b\\scratch\\test_env\\MO2\\mods\\ModB\\Data\\file4.txt",
+            "mod_origin": "ModB",
+            "is_root": false,
+            "size_bytes": 10,
+            "mtime": 1777968818.3987885,
+            "preferred_path": "Data\\file4.txt"
+        }
+    },
+    "scan_failures": {},
+    "folder_states": {
+        "ModA": 1777968818.3972757,
+        "ModB": 1777968818.397783
+    }
+}

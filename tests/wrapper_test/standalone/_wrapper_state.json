@@ -1,0 +1,9 @@
+{
+  "state": "INJECTED",
+  "saves_source": "C:\\Users\\dikoh\\Documents\\My Games\\Antigravity_Test_Docs\\Saves",
+  "saves_target": "i:\\Works\\005_MO2_Hardlink_Builder_V4b\\scratch\\wrapper_test\\mo2_profile\\Saves",
+  "profile_name": "i:\\Works\\005_MO2_Hardlink_Builder_V4b\\scratch\\wrapper_test\\mo2_profile",
+  "timestamp": "2026-05-02 14:16:23",
+  "ini_pairs": "C:\\Users\\dikoh\\Documents\\My Games\\Antigravity_Test_Docs\\Skyrim.ini<<<C:\\Users\\dikoh\\Documents\\My Games\\Antigravity_Test_Docs\\Skyrim.ini.bak_standalone",
+  "appdata_pairs": "C:\\Users\\dikoh\\AppData\\Local\\Antigravity_Test_Game\\plugins.txt<<<C:\\Users\\dikoh\\AppData\\Local\\Antigravity_Test_Game\\plugins.txt.bak_standalone"
+}

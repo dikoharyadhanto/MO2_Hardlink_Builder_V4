@@ -1,0 +1,18 @@
+{
+    "Data\\file1.txt": {
+        "status": "SUCCESS",
+        "method": "hardlink",
+        "mod": "ModA"
+    },
+    "Data\\file4.txt": {
+        "status": "SUCCESS",
+        "method": "hardlink",
+        "mod": "ModB"
+    },
+    "Data\\file3.txt": {
+        "status": "SKIPPED_UNCHANGED",
+        "category": "Unchanged",
+        "reason": "Tier 1 (inode match)",
+        "mod": "ModA"
+    }
+}

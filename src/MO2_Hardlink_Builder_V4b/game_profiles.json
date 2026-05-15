@@ -1,0 +1,186 @@
+{
+    "skyrim_se": {
+        "game_name": "Skyrim Special Edition",
+        "docs_name": "Skyrim Special Edition",
+        "appdata_name": "Skyrim Special Edition",
+        "ini_prefix": "Skyrim",
+        "steam_appid": "489830",
+        "save_path_mode": "MyGames",
+        "uses_plugins_txt": true,
+        "uses_bethesda_ini": true,
+        "blacklist_files": [
+            "meta.ini", "mo2_separator.txt", "thumbs.db", "desktop.ini",
+            "readme.txt", "credits.txt", "changelog.txt", "license.txt",
+            "readme.md", "credits.md", "changelog.md"
+        ],
+        "delta_rebuild_threshold": 0.70,
+        "known_loaders": [
+            "skse64_loader.exe",
+            "skse_loader.exe",
+            "sksevr_loader.exe"
+        ],
+        "protected_data_subdirs": ["data/update"]
+    },
+    "skyrim_ae": {
+        "game_name": "Skyrim Anniversary Edition",
+        "docs_name": "Skyrim Special Edition",
+        "appdata_name": "Skyrim Special Edition",
+        "ini_prefix": "Skyrim",
+        "steam_appid": "489830",
+        "save_path_mode": "MyGames",
+        "uses_plugins_txt": true,
+        "uses_bethesda_ini": true,
+        "blacklist_files": [
+            "meta.ini", "mo2_separator.txt", "thumbs.db", "desktop.ini",
+            "readme.txt", "credits.txt", "changelog.txt", "license.txt",
+            "readme.md", "credits.md", "changelog.md"
+        ],
+        "delta_rebuild_threshold": 0.70,
+        "known_loaders": [
+            "skse64_loader.exe"
+        ],
+        "protected_data_subdirs": ["data/update"]
+    },
+    "fallout_4": {
+        "game_name": "Fallout 4",
+        "docs_name": "Fallout4",
+        "appdata_name": "Fallout4",
+        "ini_prefix": "Fallout4",
+        "steam_appid": "377160",
+        "save_path_mode": "MyGames",
+        "uses_plugins_txt": true,
+        "uses_bethesda_ini": true,
+        "blacklist_files": [
+            "meta.ini", "mo2_separator.txt", "thumbs.db", "desktop.ini",
+            "readme.txt", "credits.txt", "changelog.txt", "license.txt",
+            "readme.md", "credits.md", "changelog.md"
+        ],
+        "delta_rebuild_threshold": 0.70,
+        "known_loaders": [
+            "f4se_loader.exe"
+        ],
+        "protected_data_subdirs": ["data/update"]
+    },
+    "starfield": {
+        "game_name": "Starfield",
+        "docs_name": "Starfield",
+        "appdata_name": "Starfield",
+        "ini_prefix": "Starfield",
+        "steam_appid": "1716740",
+        "save_path_mode": "MyGames",
+        "uses_plugins_txt": true,
+        "uses_bethesda_ini": true,
+        "blacklist_files": [
+            "meta.ini", "mo2_separator.txt", "thumbs.db", "desktop.ini",
+            "readme.txt", "credits.txt", "changelog.txt", "license.txt",
+            "readme.md", "credits.md", "changelog.md"
+        ],
+        "delta_rebuild_threshold": 0.70,
+        "known_loaders": [
+            "sfse_loader.exe"
+        ],
+        "protected_data_subdirs": ["data/update"]
+    },
+    "oblivion_remastered": {
+        "game_name": "Oblivion Remastered",
+        "docs_name": "Oblivion Remastered",
+        "appdata_name": "Oblivion Remastered",
+        "ini_prefix": "Oblivion",
+        "steam_appid": "2623190",
+        "save_path_mode": "MyGames",
+        "uses_plugins_txt": true,
+        "uses_bethesda_ini": true,
+        "blacklist_files": [
+            "meta.ini", "mo2_separator.txt", "thumbs.db", "desktop.ini",
+            "readme.txt", "credits.txt", "changelog.txt", "license.txt",
+            "readme.md", "credits.md", "changelog.md"
+        ],
+        "delta_rebuild_threshold": 0.70,
+        "known_loaders": [
+            "obse64_loader.exe",
+            "obse_loader.exe"
+        ],
+        "protected_data_subdirs": ["Data/Updates"]
+    },
+    "fallout_nv": {
+        "game_name": "Fallout New Vegas",
+        "docs_name": "FalloutNV",
+        "appdata_name": "FalloutNV",
+        "ini_prefix": "FalloutNV",
+        "steam_appid": "22380",
+        "save_path_mode": "MyGames",
+        "uses_plugins_txt": true,
+        "uses_bethesda_ini": true,
+        "blacklist_files": [
+            "meta.ini", "mo2_separator.txt", "thumbs.db", "desktop.ini",
+            "readme.txt", "credits.txt", "changelog.txt", "license.txt",
+            "readme.md", "credits.md", "changelog.md"
+        ],
+        "delta_rebuild_threshold": 0.70,
+        "known_loaders": [
+            "nvse_loader.exe",
+            "nvse_steam_loader.exe"
+        ],
+        "protected_data_subdirs": []
+    },
+    "morrowind": {
+        "game_name": "Morrowind",
+        "docs_name": "Morrowind",
+        "appdata_name": "Morrowind",
+        "ini_prefix": "Morrowind",
+        "steam_appid": "22320",
+        "save_path_mode": "None",
+        "uses_plugins_txt": false,
+        "uses_bethesda_ini": false,
+        "blacklist_files": [
+            "meta.ini", "mo2_separator.txt", "thumbs.db", "desktop.ini",
+            "readme.txt", "credits.txt", "changelog.txt", "license.txt",
+            "readme.md", "credits.md", "changelog.md"
+        ],
+        "delta_rebuild_threshold": 0.70,
+        "known_loaders": [
+            "mwse_loader.exe"
+        ],
+        "protected_data_subdirs": []
+    },
+    "cyberpunk_2077": {
+        "game_name": "Cyberpunk 2077",
+        "docs_name": "Cyberpunk 2077",
+        "appdata_name": "Cyberpunk 2077",
+        "ini_prefix": "Cyberpunk2077",
+        "steam_appid": "1091500",
+        "save_path_mode": "SavedGames",
+        "save_path_custom": "CD Projekt Red\\Cyberpunk 2077",
+        "uses_plugins_txt": false,
+        "uses_bethesda_ini": false,
+        "blacklist_files": [
+            "meta.ini", "mo2_separator.txt", "thumbs.db", "desktop.ini",
+            "readme.txt", "credits.txt", "changelog.txt", "license.txt",
+            "readme.md", "credits.md", "changelog.md"
+        ],
+        "delta_rebuild_threshold": 0.70,
+        "known_loaders": [
+            "REDprelauncher.exe"
+        ],
+        "protected_data_subdirs": ["archive/pc/mod"]
+    },
+    "battlefront_2": {
+        "game_name": "STAR WARS Battlefront II",
+        "docs_name": "STAR WARS Battlefront II",
+        "appdata_name": "StarWarsBattlefrontII",
+        "ini_prefix": "BattlefrontII",
+        "steam_appid": "1237950",
+        "save_path_mode": "Documents",
+        "save_path_custom": "STAR WARS Battlefront II\\settings",
+        "uses_plugins_txt": false,
+        "uses_bethesda_ini": false,
+        "blacklist_files": [
+            "meta.ini", "mo2_separator.txt", "thumbs.db", "desktop.ini",
+            "readme.txt", "credits.txt", "changelog.txt", "license.txt",
+            "readme.md", "credits.md", "changelog.md"
+        ],
+        "delta_rebuild_threshold": 0.70,
+        "known_loaders": [],
+        "protected_data_subdirs": ["data/mod"]
+    }
+}
