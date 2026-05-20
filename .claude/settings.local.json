@@ -1,6 +1,29 @@
 {
+  "permissions": {
+    "allow": [
+      "mcp__sigma-memory__search_nodes",
+      "mcp__sigma-memory__read_graph",
+      "Bash(sigma session *)",
+      "Bash(sigma inbox *)",
+      "Bash(sigma exec *)",
+      "Bash(Get-ChildItem \"i:\\\\Works\\\\Project\\\\MO2_Hardlink_Builder\\\\src\\\\MO2_Hardlink_Builder_V4b\" -Recurse -File)",
+      "Bash(Select-Object -Property Name, DirectoryName)",
+      "Bash(Sort-Object DirectoryName, Name)",
+      "Bash(Format-Table -AutoSize)",
+      "Bash(sigma --help)",
+      "Bash(sigma cso *)",
+      "Bash(Get-Content \"i:\\\\Works\\\\Project\\\\MO2_Hardlink_Builder\\\\Sigma\\\\logs\\\\CSO-ANON-20260518-0627.md\" -TotalCount 20)",
+      "Bash(powershell -Command \"Get-Content 'Sigma\\\\progress.json' | Select-String -Pattern 'CSO|cso' | Select-Object -First 10\")",
+      "Bash(Remove-Item \"Sigma\\\\logs\\\\_cso_dev_checkpoint_draft.md\")",
+      "Bash(Remove-Item \"Sigma\\\\logs\\\\CSO-ANON-20260518-0627.md\")",
+      "Bash(Write-Host \"Draft and ANON files cleaned up.\")",
+      "Bash(sigma send *)"
+    ]
+  },
   "enabledMcpjsonServers": [
     "sequential-thinking",
-    "memory"
-  ]
+    "memory",
+    "sigma-memory"
+  ],
+  "enableAllProjectMcpServers": true
 }

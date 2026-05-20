@@ -447,6 +447,13 @@ class LinkerExecutor:
 
         if not action_queue:
             logger.info("execute_action_queue: empty queue — nothing to do.")
+            # Write a fresh empty report so downstream HTML generation cannot
+            # inherit stale prior-run deployment data (FMN-PLAN v0.3 / TC-R01).
+            try:
+                with open(self.report_file, "w", encoding="utf-8") as f:
+                    json.dump({}, f, indent=4)
+            except Exception as e:
+                logger.error("Failed to write empty execution report: %s", e)
             return result
 
         # Split queue into phases

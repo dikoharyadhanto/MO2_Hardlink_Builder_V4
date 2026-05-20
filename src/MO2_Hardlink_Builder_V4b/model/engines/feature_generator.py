@@ -72,7 +72,7 @@ class StandaloneLauncher
 
     static void WriteState(string state, string savesSource, string savesTarget,
                             string profileName, List<string[]> iniPairs,
-                            List<string[]> appDataPairs)
+                            List<string[]> appDataPairs, List<string> docsOnlySaves)
     {
         var pairParts = new List<string>();
         foreach (var pair in iniPairs)
@@ -84,15 +84,21 @@ class StandaloneLauncher
             adPairParts.Add(JsonEscape(pair[0]) + "<<<" + JsonEscape(pair[1]));
         string adPairsVal = string.Join(">>>", adPairParts);
 
+        var dosParts = new List<string>();
+        foreach (var s in docsOnlySaves)
+            dosParts.Add(JsonEscape(s));
+        string dosVal = string.Join(";", dosParts);
+
         string json =
             "{\n" +
-            "  \"state\": \""          + JsonEscape(state)       + "\",\n" +
-            "  \"saves_source\": \""   + JsonEscape(savesSource) + "\",\n" +
-            "  \"saves_target\": \""   + JsonEscape(savesTarget) + "\",\n" +
-            "  \"profile_name\": \""   + JsonEscape(profileName) + "\",\n" +
-            "  \"timestamp\": \""      + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "\",\n" +
-            "  \"ini_pairs\": \""      + pairsVal                + "\",\n" +
-            "  \"appdata_pairs\": \""  + adPairsVal              + "\"\n" +
+            "  \"state\": \""            + JsonEscape(state)       + "\",\n" +
+            "  \"saves_source\": \""     + JsonEscape(savesSource) + "\",\n" +
+            "  \"saves_target\": \""     + JsonEscape(savesTarget) + "\",\n" +
+            "  \"profile_name\": \""     + JsonEscape(profileName) + "\",\n" +
+            "  \"timestamp\": \""        + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "\",\n" +
+            "  \"ini_pairs\": \""        + pairsVal                + "\",\n" +
+            "  \"appdata_pairs\": \""    + adPairsVal              + "\",\n" +
+            "  \"docs_only_saves\": \""  + dosVal                  + "\"\n" +
             "}";
         File.WriteAllText(StateFile, json);
     }
@@ -205,15 +211,39 @@ class StandaloneLauncher
                 try
                 {
                     Directory.CreateDirectory(savesTarget);
+                    // TASK-S03/S04: Parse docs-only saves to skip them during recovery sync.
+                    // Also skip .bak_standalone artifacts — they must never be imported into MO2.
+                    var docsOnlyRec = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    string dosRaw = fields.ContainsKey("docs_only_saves") ? fields["docs_only_saves"] : "";
+                    if (!string.IsNullOrEmpty(dosRaw))
+                        foreach (string s in dosRaw.Split(';'))
+                            if (!string.IsNullOrEmpty(s)) docsOnlyRec.Add(s);
+
+                    int recSynced = 0;
                     foreach (string sf in Directory.GetFiles(
                         savesSource, "*", SearchOption.AllDirectories))
                     {
+                        // Skip tool-owned backup artifacts — never import into MO2
+                        if (sf.EndsWith(".bak_standalone", StringComparison.OrdinalIgnoreCase))
+                            continue;
                         string rel = sf.Substring(savesSource.Length + 1);
+                        // Skip Documents-only saves — they must stay in Documents
+                        if (docsOnlyRec.Contains(rel))
+                            continue;
                         string dst = Path.Combine(savesTarget, rel);
                         Directory.CreateDirectory(Path.GetDirectoryName(dst));
                         File.Copy(sf, dst, true);
+                        recSynced++;
                     }
-                    Log("Recovery: saves synced to " + savesTarget);
+                    Log("Recovery: saves synced to " + savesTarget + " (" + recSynced + " file(s)).");
+                    // TASK-S02: Remove leftover .bak_standalone artifacts from live saves folder
+                    try
+                    {
+                        foreach (string bakFile in Directory.GetFiles(
+                            savesSource, "*.bak_standalone", SearchOption.AllDirectories))
+                            SafeDelete(bakFile);
+                    }
+                    catch { }
                 }
                 catch (Exception ex)
                 {
@@ -329,6 +359,7 @@ class StandaloneLauncher
         // Pre-launch REQUIRED: backup existing game INIs, inject MO2 profile INIs.
         // Failure aborts the launch — the game would run with wrong settings.
         List<string[]> iniBackupPairs = new List<string[]>();
+        List<string> docsOnlySaves = new List<string>();
         if (isStealth)
         {
             if (!Directory.Exists(mo2Profile))
@@ -420,7 +451,7 @@ class StandaloneLauncher
                 if (iniBackupPairs.Count > 0)
                 {
                     WriteState("INJECTED", gameSavesPath, mo2SavesPath,
-                               mo2Profile, iniBackupPairs, new List<string[]>());
+                               mo2Profile, iniBackupPairs, new List<string[]>(), docsOnlySaves);
                     Log("State: INJECTED written.");
                 }
             } // end usesBethesdaIni
@@ -483,7 +514,7 @@ class StandaloneLauncher
                 if (appDataBackupPairs.Count > 0)
                 {
                     WriteState("INJECTED", gameSavesPath, mo2SavesPath,
-                               mo2Profile, iniBackupPairs, appDataBackupPairs);
+                               mo2Profile, iniBackupPairs, appDataBackupPairs, docsOnlySaves);
                     Log("State: INJECTED updated with AppData pairs.");
                 }
             }
@@ -541,6 +572,35 @@ class StandaloneLauncher
         else if (isStealth)
         {
             Log("Save injection: MO2 saves folder not found \u2014 skipping.");
+        }
+
+        // TASK-S04: Identify Documents-only saves (present in Documents, absent from MO2).
+        // These must not be deleted or promoted to MO2 during post-game sync or recovery.
+        if (isStealth && Directory.Exists(gameSavesPath))
+        {
+            try
+            {
+                var mo2SaveRels = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                if (Directory.Exists(mo2SavesPath))
+                {
+                    foreach (string msf in Directory.GetFiles(mo2SavesPath, "*", SearchOption.AllDirectories))
+                        mo2SaveRels.Add(msf.Substring(mo2SavesPath.Length).TrimStart(Path.DirectorySeparatorChar));
+                }
+                foreach (string dsf in Directory.GetFiles(gameSavesPath, "*", SearchOption.AllDirectories))
+                {
+                    if (dsf.EndsWith(".bak_standalone", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    string rel = dsf.Substring(gameSavesPath.Length).TrimStart(Path.DirectorySeparatorChar);
+                    if (!mo2SaveRels.Contains(rel))
+                        docsOnlySaves.Add(rel);
+                }
+                if (docsOnlySaves.Count > 0)
+                    Log("Pre-launch: " + docsOnlySaves.Count + " Documents-only save(s) identified for preservation.");
+            }
+            catch (Exception ex)
+            {
+                Log("WARNING: Documents-only save scan failed: " + ex.Message);
+            }
         }
 
         int exitCode = 0;
@@ -602,7 +662,7 @@ class StandaloneLauncher
                 try
                 {
                     WriteState("SYNC_PENDING", gameSavesPath, mo2SavesPath,
-                               mo2Profile, iniBackupPairs, appDataBackupPairs);
+                               mo2Profile, iniBackupPairs, appDataBackupPairs, docsOnlySaves);
                     Log("State: SYNC_PENDING written.");
                 }
                 catch (Exception ex)
@@ -624,6 +684,7 @@ class StandaloneLauncher
 
                     int syncedSaves = 0;
                     int failedSaves = 0;
+                    var docsOnlySet = new HashSet<string>(docsOnlySaves, StringComparer.OrdinalIgnoreCase);
                     foreach (string sf in Directory.GetFiles(
                         gameSavesPath, "*", SearchOption.AllDirectories))
                     {
@@ -632,6 +693,9 @@ class StandaloneLauncher
                             continue;
 
                         string rel     = sf.Substring(gameSavesPath.Length + 1);
+                        // TASK-S04: Skip Documents-only saves — preserve them in place, never sync to MO2
+                        if (docsOnlySet.Contains(rel))
+                            continue;
                         string staged  = Path.Combine(stagingDir, rel);
                         string finalDst = Path.Combine(mo2SavesPath, rel);
 
@@ -696,6 +760,26 @@ class StandaloneLauncher
                     try { Directory.Delete(stagingDir, false); } catch { }
 
                     Log("Save sync complete: " + syncedSaves + " synced, " + failedSaves + " failed.");
+
+                    // TASK-S02: Remove all .bak_standalone save artifacts left by pre-launch backup.
+                    // These are temporary backups of saves that were overwritten during injection.
+                    // The game has now exited and saves are synced; the backups are no longer needed.
+                    try
+                    {
+                        int bakCleaned = 0;
+                        foreach (string bakFile in Directory.GetFiles(
+                            gameSavesPath, "*.bak_standalone", SearchOption.AllDirectories))
+                        {
+                            SafeDelete(bakFile);
+                            bakCleaned++;
+                        }
+                        if (bakCleaned > 0)
+                            Log("Cleanup: removed " + bakCleaned + " leftover .bak_standalone save artifact(s).");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log("WARNING: .bak_standalone save cleanup failed: " + ex.Message);
+                    }
                 }
                 catch (Exception ex)
                 {

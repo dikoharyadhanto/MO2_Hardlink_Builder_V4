@@ -41,17 +41,26 @@ class EnvironmentSensor:
     def run_all(self) -> SensorResult:
         result = SensorResult()
 
-        od = self._check_onedrive()
-        if od:
-            result.conflicts.append(od)
+        try:
+            od = self._check_onedrive()
+            if od:
+                result.conflicts.append(od)
+        except Exception as e:
+            logger.warning("Pre-flight OneDrive check failed (non-fatal): %s", e)
 
-        cfa = self._check_defender_cfa()
-        if cfa:
-            result.conflicts.append(cfa)
+        try:
+            cfa = self._check_defender_cfa()
+            if cfa:
+                result.conflicts.append(cfa)
+        except Exception as e:
+            logger.warning("Pre-flight Defender CFA check failed (non-fatal): %s", e)
 
         if self.game_path:
-            pid_conflicts = self._check_pid_locks(self.game_path)
-            result.conflicts.extend(pid_conflicts)
+            try:
+                pid_conflicts = self._check_pid_locks(self.game_path)
+                result.conflicts.extend(pid_conflicts)
+            except Exception as e:
+                logger.warning("Pre-flight PID lock check failed (non-fatal): %s", e)
 
         if result.has_conflicts:
             logger.warning(

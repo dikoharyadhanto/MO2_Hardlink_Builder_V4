@@ -203,29 +203,29 @@ class ReportGenerator:
                 html_chunks.append('<div class="error-box"><h3>⚠️ Post-Deployment Verification Warnings</h3><ul>')
                 
                 if configs:
-                    html_chunks.append(f"<li><strong>Config Mismatch:</strong> {{len(configs)}} issue(s) detected with INIs / Plugins / Load Order.</li>")
-                    for c in configs: html_chunks.append(f"<li>&nbsp;&nbsp;&bull; {{c}}</li>")
-                
+                    html_chunks.append(f"<li><strong>Config Mismatch:</strong> {len(configs)} issue(s) detected with INIs / Plugins / Load Order.</li>")
+                    for c in configs: html_chunks.append(f"<li>&nbsp;&nbsp;&bull; {c}</li>")
+
                 if missing:
-                    html_chunks.append(f"<li><strong>Missing Files:</strong> {{len(missing)}} files from manifest are missing in Standalone folder.</li>")
-                    for m in missing[:5]: html_chunks.append(f"<li>&nbsp;&nbsp;&bull; {{m['file']}} ({{m['mod']}})</li>")
-                    if len(missing) > 5: html_chunks.append(f"<li>&nbsp;&nbsp;&bull; ... and {{len(missing)-5}} more.</li>")
-                
+                    html_chunks.append(f"<li><strong>Missing Files:</strong> {len(missing)} files from manifest are missing in Standalone folder.</li>")
+                    for m in missing[:5]: html_chunks.append(f"<li>&nbsp;&nbsp;&bull; {m['file']} ({m['mod']})</li>")
+                    if len(missing) > 5: html_chunks.append(f"<li>&nbsp;&nbsp;&bull; ... and {len(missing)-5} more.</li>")
+
                 if zeros:
-                    html_chunks.append(f"<li><strong>Size Mismatches:</strong> {{len(zeros)}} files have size mismatches.</li>")
-                    for z in zeros[:5]: html_chunks.append(f"<li>&nbsp;&nbsp;&bull; {{z['file']}} ({{z['mod']}})</li>")
-                    if len(zeros) > 5: html_chunks.append(f"<li>&nbsp;&nbsp;&bull; ... and {{len(zeros)-5}} more.</li>")
-                
+                    html_chunks.append(f"<li><strong>Size Mismatches:</strong> {len(zeros)} files have size mismatches.</li>")
+                    for z in zeros[:5]: html_chunks.append(f"<li>&nbsp;&nbsp;&bull; {z['file']} ({z['mod']})</li>")
+                    if len(zeros) > 5: html_chunks.append(f"<li>&nbsp;&nbsp;&bull; ... and {len(zeros)-5} more.</li>")
+
                 if saves:
                     for s in saves:
                         summary = s if isinstance(s, str) else s.get("summary", "Save sync issue")
                         files = [] if isinstance(s, str) else s.get("missing_files", [])
                         source = "Unknown" if isinstance(s, str) else s.get("source", "Source")
-                        
-                        html_chunks.append(f"<li><strong>Save Sync Issue:</strong> {{summary}} (Source: {{source}})</li>")
+
+                        html_chunks.append(f"<li><strong>Save Sync Issue:</strong> {summary} (Source: {source})</li>")
                         if files:
-                            for f in files[:5]: html_chunks.append(f"<li>&nbsp;&nbsp;&bull; Missing: {{f}}</li>")
-                            if len(files) > 5: html_chunks.append(f"<li>&nbsp;&nbsp;&bull; ... and {{len(files)-5}} more.</li>")
+                            for f in files[:5]: html_chunks.append(f"<li>&nbsp;&nbsp;&bull; Missing: {f}</li>")
+                            if len(files) > 5: html_chunks.append(f"<li>&nbsp;&nbsp;&bull; ... and {len(files)-5} more.</li>")
 
                 html_chunks.append('</ul></div>')
 

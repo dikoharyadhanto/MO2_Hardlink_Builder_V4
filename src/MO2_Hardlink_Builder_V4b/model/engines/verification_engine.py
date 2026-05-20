@@ -270,10 +270,41 @@ class VerificationEngine:
         }
         return self.results["mod_audit"]
 
+    def verify_save_artifacts(self, game_saves_path, game_not_running=True):
+        """TASK-S05: Detect leftover wrapper-owned backup artifacts in the live saves folder.
+
+        When the game is not running and the tool has completed its cycle,
+        no *.bak_standalone files should remain. Their presence indicates an
+        incomplete or failed cleanup cycle and is treated as a save issue.
+        """
+        if not game_not_running or not game_saves_path:
+            return
+        saves_dir = Path(ensure_long_path(game_saves_path))
+        if not saves_dir.exists():
+            return
+        try:
+            leftovers = sorted(f.name for f in saves_dir.rglob("*.bak_standalone"))
+            if leftovers:
+                self.results["save_issues"].append({
+                    "summary": (
+                        f"Leftover wrapper backup artifact(s) found in live saves folder "
+                        f"while game is not running: {len(leftovers)} file(s)."
+                    ),
+                    "source": "SaveArtifactCheck",
+                    "missing_files": leftovers,
+                })
+                logger.warning(
+                    "TASK-S05: %d leftover .bak_standalone artifact(s) in %s",
+                    len(leftovers), saves_dir,
+                )
+        except Exception as e:
+            logger.warning("verify_save_artifacts failed: %s", e)
+
     def run_all_checks(self, manifest_path=None, standalone_path=None, mo2_profile_path=None,
                        appdata_path=None, doc_save_path=None, ini_prefix="Skyrim",
                        run_timestamp=None, mods_dir=None, use_documents_mode=False,
-                       stealth_mode=False, progress_callback=None):
+                       stealth_mode=False, progress_callback=None,
+                       game_saves_path=None, game_not_running=True):
         if manifest_path:
             self.verify_deployment(manifest_path, standalone_path,
                                    progress_callback=progress_callback)
@@ -289,6 +320,9 @@ class VerificationEngine:
                                 stealth_mode=stealth_mode)
             self.verify_saves(mo2_profile_path, doc_save_path, run_timestamp=run_timestamp,
                               use_documents_mode=use_documents_mode, stealth_mode=stealth_mode)
+
+        if game_saves_path:
+            self.verify_save_artifacts(game_saves_path, game_not_running=game_not_running)
 
         if manifest_path:
             try:

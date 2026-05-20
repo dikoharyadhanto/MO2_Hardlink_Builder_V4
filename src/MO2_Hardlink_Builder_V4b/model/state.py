@@ -365,9 +365,12 @@ class LayeredManifest:
         # Build priority lookup: higher index = higher priority.
         priority = {mod: idx for idx, mod in enumerate(load_order)}
 
-        # For each virtual path, collect all mods that provide it, sort by priority desc.
+        # For each virtual path, collect ACTIVE mods (in load_order) that provide it.
+        # Mods absent from load_order are inactive/disabled — never included in path_owners.
         path_to_providers: dict = {}
         for mod_name, mod_entry in self.mod_index.items():
+            if mod_name not in priority:
+                continue  # Disabled / inactive mod — skip entirely
             for path_key in mod_entry.get("files", {}):
                 if path_key not in path_to_providers:
                     path_to_providers[path_key] = []
@@ -378,7 +381,7 @@ class LayeredManifest:
             # Sort descending by priority (highest first = index 0)
             sorted_owners = sorted(
                 providers,
-                key=lambda m: priority.get(m, -1),
+                key=lambda m: priority[m],
                 reverse=True,
             )
             new_owners[path_key] = sorted_owners
