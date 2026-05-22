@@ -8,6 +8,8 @@ __pycache__/
 Thumbs.db
 nul
 archieved/
+tests/*.log
+tests/*.txt
 Sigma/
 .mcp.json
 AGENTS.md

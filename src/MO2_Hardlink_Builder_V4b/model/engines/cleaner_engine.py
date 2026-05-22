@@ -11,7 +11,7 @@ from .path_utils import ensure_long_path
 logger = logging.getLogger(__name__)
 audit_logger = logging.getLogger("hardlink_audit")
 
-# FEAT-16: tool-written artifact exclusions — never harvested
+# Tool-written artifacts — never included in the harvest pass
 HARVEST_EXCLUSIONS_EXACT = {
     "standalone_metadata",
     "_wrapper_state.json",
@@ -115,7 +115,7 @@ class CleanerEngine:
         """
         Full cleanup of standalone directory.
         Returns {"status": "SKIPPED"|"FINISHED"|"PARTIAL_FAILURE", "errors": []}.
-        FIX-05: Every deletion is logged; errors are never silently swallowed.
+        Every deletion is logged; errors are never silently swallowed.
         """
         logger.info("Cleaning standalone directory: %s", self.sa_path)
         errors = []
@@ -181,9 +181,6 @@ class CleanerEngine:
         logger.info("Cleanup complete.")
         return {"status": "FINISHED", "errors": []}
 
-    # ------------------------------------------------------------------
-    # FEAT-16: Generated file harvest — runs before total_cleanup()
-    # ------------------------------------------------------------------
     def harvest_generated_files(self, manifest_path) -> dict:
         """
         Identifies files in standalone that were generated DURING GAMEPLAY (not deployed by

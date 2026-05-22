@@ -1,18 +1,23 @@
 """
-FEAT-08: HOW TO LAUNCH.txt auto-generation after build.
-FEAT-09: steam_appid.txt write after build.
-FEAT-10: Loader EXE wrapping via csc.exe runtime C# compilation.
-         Falls back to .bat launcher if csc.exe is unavailable or compilation fails.
-         D1: multi-path csc.exe discovery.
-         D2: .cs source deleted in finally — always.
-         D3: compiler stderr surfaced to audit log on non-zero returncode.
-         D4: lean template — no CPU/IO/affinity/MMCSS/RAM-trim/thermal code.
-         D5: game process name injected from game_exe stem — no hardcoded fallback list.
-         D6: clean 3-state hijack check (FRESH / REWRAP / SKIP).
-         D7: attrib +h failure logged at WARNING — never silent.
-         D8: _wrapper_state.json deferred task recovery — INJECTED/SYNC_PENDING survive crashes.
-         D9: AppData physical sync — plugins.txt/loadorder.txt copied to real %LOCALAPPDATA%
-             instead of env var injection (SHGetFolderPath bypass fix per ANT-WO-005-v3.3).
+Post-build file generation:
+  - HOW TO LAUNCH.txt — plain-text launch instructions written to the standalone root.
+  - steam_appid.txt — required for Steam overlay and in-game store features.
+  - Loader EXE wrapping — renames original loader EXEs and compiles a C# stealth launcher
+    in their place via csc.exe. Falls back to .bat if csc.exe is unavailable or compilation
+    fails. No pre-compiled binary is required or distributed.
+
+C# launcher behaviour:
+  - Discovers csc.exe across Framework64 and Framework paths (v4 preferred).
+  - Source .cs file is always deleted in a finally block — never left in the standalone folder.
+  - Compiler stderr is surfaced to the audit log on a non-zero exit code.
+  - Lean template: no CPU affinity, MMCSS, RAM-trim, or thermal code.
+  - Game process name is derived from the game EXE stem — no hardcoded fallback list.
+  - 3-state hijack check: FRESH (first rename), REWRAP (re-deploy wrapper), SKIP (not found).
+  - attrib +h failure is logged at WARNING, never silently ignored.
+  - _wrapper_state.json enables deferred task recovery — INJECTED/SYNC_PENDING states
+    survive a crash and are completed on the next launcher startup.
+  - plugins.txt/loadorder.txt are physically copied to %LOCALAPPDATA% instead of injected
+    via environment variables, so they work without any VFS or hook.
 """
 import logging
 import os
@@ -23,7 +28,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 audit_logger = logging.getLogger("hardlink_audit")
 
-# D1: csc.exe search order — Framework64 preferred, 32-bit fallback, v4 before v3.5
+# csc.exe search order — Framework64 preferred, 32-bit fallback, v4 before v3.5
 _CSC_SEARCH_PATHS = [
     r"C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe",
     r"C:\Windows\Microsoft.NET\Framework64\v3.5\csc.exe",
@@ -33,10 +38,9 @@ _CSC_SEARCH_PATHS = [
     r"C:\Windows\Microsoft.NET\Framework\v2.0.50727\csc.exe",
 ]
 
-# D4/D5/D8: lean stealth-only C# launcher template with deferred task recovery.
-# Placeholders use {ALLCAPS} tokens injected via str.replace() — no Python .format()
-# called on this string, so C# brace syntax is never misinterpreted.
-# D8: _wrapper_state.json stores INJECTED/SYNC_PENDING so a crash anywhere in the
+# C# launcher template — placeholders use {ALLCAPS} tokens injected via str.replace().
+# Python .format() is never called on this string so C# brace syntax is safe.
+# _wrapper_state.json stores INJECTED/SYNC_PENDING so a crash at any point in the
 # launch/sync/restore cycle is recovered automatically on the next startup.
 _CS_TEMPLATE = r"""using System;
 using System.Collections.Generic;
@@ -211,7 +215,7 @@ class StandaloneLauncher
                 try
                 {
                     Directory.CreateDirectory(savesTarget);
-                    // TASK-S03/S04: Parse docs-only saves to skip them during recovery sync.
+                    // Parse docs-only saves to skip them during recovery sync.
                     // Also skip .bak_standalone artifacts — they must never be imported into MO2.
                     var docsOnlyRec = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                     string dosRaw = fields.ContainsKey("docs_only_saves") ? fields["docs_only_saves"] : "";
@@ -236,7 +240,7 @@ class StandaloneLauncher
                         recSynced++;
                     }
                     Log("Recovery: saves synced to " + savesTarget + " (" + recSynced + " file(s)).");
-                    // TASK-S02: Remove leftover .bak_standalone artifacts from live saves folder
+                    // Remove leftover .bak_standalone artifacts from the live saves folder
                     try
                     {
                         foreach (string bakFile in Directory.GetFiles(
@@ -328,7 +332,7 @@ class StandaloneLauncher
         string appDataName  = "{APPDATA_NAME}";
         string iniPrefix    = "{INI_PREFIX}";   // e.g. "Skyrim", "Oblivion"
 
-        // D8: deferred task recovery — complete any interrupted cycle before fresh injection
+        // Deferred task recovery — complete any interrupted cycle before starting a new one
         try { RecoverIfNeeded(mo2Profile); }
         catch (Exception ex) { Log("Recovery exception (non-fatal): " + ex.Message); }
 
@@ -529,9 +533,9 @@ class StandaloneLauncher
             } // end usesPluginsTxt
         } // end AppData block
 
-        // Pre-launch: Save injection — copy MO2 saves → Documents/Saves so the game sees existing saves.
-        // TASK-A05: Explicit backup of any existing saves in Documents before overwriting.
-        // Only copies files not already present (no overwrite) to avoid clobbering newer game saves.
+        // Pre-launch: copy MO2 saves → Documents/Saves so the game sees existing saves.
+        // Backs up any saves already in Documents before injecting, so nothing is lost.
+        // Only copies files not already present to avoid clobbering newer game saves.
         if (isStealth && Directory.Exists(mo2SavesPath))
         {
             try
@@ -550,7 +554,7 @@ class StandaloneLauncher
                     }
                     else
                     {
-                        // TASK-A05: Back up the existing global save before MO2 save would overwrite it
+                        // Back up the existing Documents save before it would be overwritten
                         string dstBak = dst + ".bak_standalone";
                         if (!File.Exists(dstBak))
                         {
@@ -574,8 +578,8 @@ class StandaloneLauncher
             Log("Save injection: MO2 saves folder not found \u2014 skipping.");
         }
 
-        // TASK-S04: Identify Documents-only saves (present in Documents, absent from MO2).
-        // These must not be deleted or promoted to MO2 during post-game sync or recovery.
+        // Identify Documents-only saves (present in Documents but absent from MO2).
+        // These must not be deleted or synced to MO2 during post-game save sync or recovery.
         if (isStealth && Directory.Exists(gameSavesPath))
         {
             try
@@ -656,7 +660,7 @@ class StandaloneLauncher
         }
         finally
         {
-            // D8: write SYNC_PENDING before attempting sync — crash here is recoverable
+            // Write SYNC_PENDING before starting sync — a crash here will be recovered on next launch
             if (isStealth && (iniBackupPairs.Count > 0 || appDataBackupPairs.Count > 0))
             {
                 try
@@ -671,9 +675,9 @@ class StandaloneLauncher
                 }
             }
 
-            // TASK-A05: Transactional save sync back to MO2 profile.
+            // Transactional save sync back to MO2 profile.
             // Pipeline: copy to staging → MD5 verify → File.Move() atomic swap → delete source.
-            // Source is NEVER deleted unless the atomic move has already succeeded.
+            // The source file is only deleted after the atomic move succeeds.
             if (isStealth && Directory.Exists(gameSavesPath))
             {
                 string stagingDir = Path.Combine(mo2Profile, "_standalone_saves_staging");
@@ -693,7 +697,7 @@ class StandaloneLauncher
                             continue;
 
                         string rel     = sf.Substring(gameSavesPath.Length + 1);
-                        // TASK-S04: Skip Documents-only saves — preserve them in place, never sync to MO2
+                        // Skip Documents-only saves — they must never be synced back to MO2
                         if (docsOnlySet.Contains(rel))
                             continue;
                         string staged  = Path.Combine(stagingDir, rel);
@@ -761,9 +765,8 @@ class StandaloneLauncher
 
                     Log("Save sync complete: " + syncedSaves + " synced, " + failedSaves + " failed.");
 
-                    // TASK-S02: Remove all .bak_standalone save artifacts left by pre-launch backup.
-                    // These are temporary backups of saves that were overwritten during injection.
-                    // The game has now exited and saves are synced; the backups are no longer needed.
+                    // Remove .bak_standalone artifacts left by the pre-launch backup.
+                    // The game has exited and saves are synced; the backups are no longer needed.
                     try
                     {
                         int bakCleaned = 0;
@@ -838,7 +841,7 @@ class StandaloneLauncher
                 }
             }
 
-            // D8: delete state file only after full successful completion
+            // Delete state file only after the full cycle completes successfully
             SafeDelete(StateFile);
         }
 
@@ -856,7 +859,7 @@ def write_launch_instructions(
     docs_name: str = "",
     use_stealth: bool = True,
 ) -> bool:
-    """FEAT-08: Writes HOW TO LAUNCH.txt to the standalone root."""
+    """Writes HOW TO LAUNCH.txt to the standalone root."""
     sa_path = Path(standalone_path)
 
     # Determine the primary loader to advertise
@@ -913,7 +916,7 @@ def write_launch_instructions(
 
 
 def write_steam_appid(standalone_path: str, appid: str) -> bool:
-    """FEAT-09: Writes steam_appid.txt to the standalone root."""
+    """Writes steam_appid.txt to the standalone root."""
     try:
         dest = Path(standalone_path) / "steam_appid.txt"
         with open(dest, "w", encoding="utf-8") as f:
@@ -925,12 +928,8 @@ def write_steam_appid(standalone_path: str, appid: str) -> bool:
         return False
 
 
-# ---------------------------------------------------------------------------
-# FEAT-10 helpers
-# ---------------------------------------------------------------------------
-
 def _find_csc() -> str | None:
-    """D1: Searches .NET Framework paths in priority order. Returns path or None."""
+    """Searches .NET Framework paths in priority order and returns the csc.exe path, or None."""
     for path in _CSC_SEARCH_PATHS:
         if os.path.isfile(path):
             logger.info("csc.exe found: %s", path)
@@ -964,9 +963,9 @@ def _generate_cs_source(
 
 def _compile_launcher(csc_path: str, sa_path: Path, target_name: str, cs_src: str) -> bool:
     """
-    Writes cs_src to a temp .cs file, compiles to target_name with csc.exe.
-    D2: deletes .cs source in finally — always, regardless of outcome.
-    D3: logs result.stderr to audit_logger on non-zero returncode.
+    Writes cs_src to a temp .cs file and compiles it to target_name using csc.exe.
+    The .cs source is always deleted in the finally block regardless of outcome.
+    Compiler stderr is written to the audit log on a non-zero exit code.
     Returns True on success.
     """
     target_path = sa_path / target_name
@@ -979,7 +978,6 @@ def _compile_launcher(csc_path: str, sa_path: Path, target_name: str, cs_src: st
             text=True,
         )
         if result.returncode != 0:
-            # D3: surface stderr so the user is not left with a generic error
             audit_logger.warning(
                 "csc.exe compile failed for %s (rc=%d):\n%s",
                 target_name, result.returncode, result.stderr.strip(),
@@ -991,7 +989,6 @@ def _compile_launcher(csc_path: str, sa_path: Path, target_name: str, cs_src: st
         logger.error("Compile exception for %s: %s", target_name, e)
         return False
     finally:
-        # D2: always delete source, never leave .cs in standalone folder
         try:
             if cs_path.exists():
                 cs_path.unlink()
@@ -1013,16 +1010,15 @@ def wrap_loaders(
     uses_bethesda_ini: bool = True,
 ) -> dict:
     """
-    FEAT-10: Renames original loader EXEs and compiles a C# stealth launcher
-    in their place via csc.exe. Falls back to .bat if csc.exe is unavailable
-    or compilation fails. No pre-compiled EXE required.
+    Renames original loader EXEs and compiles a C# stealth launcher in their place
+    using csc.exe. Falls back to .bat if csc.exe is unavailable or compilation fails.
+    No pre-compiled binary is required or distributed.
 
     Returns {"hijacked": int, "exe_wrappers": int, "bat_wrappers": int}.
     """
     sa_path = Path(standalone_path)
     csc_path = _find_csc()
 
-    # D5: inject game_exe stem as the only process name — no hardcoded fallback list
     game_name = Path(game_exe).stem if game_exe else ""
 
     result = {"hijacked": 0, "exe_wrappers": 0, "bat_wrappers": 0}
@@ -1062,7 +1058,7 @@ def wrap_loaders(
                     logger.warning("Failed to restore secondary EXE %s: %s", target_name, e)
             continue
 
-        # D6: clean 3-state check — no ambiguous counter increments before guards
+        # 3-state check: FRESH (first run), REWRAP (re-deploy), SKIP (not found)
         if target_path.exists() and not original_path.exists():
             # FRESH: first-time hijack — rename original EXE
             try:
@@ -1116,7 +1112,7 @@ def wrap_loaders(
             result["bat_wrappers"] += 1
             logger.info("Deployed .bat fallback for: %s", target_name)
 
-        # D7: hide original EXE — log failure at WARNING, never silent
+        # Hide original EXE — log failure at WARNING, never silently ignore it
         try:
             subprocess.run(
                 ["attrib", "+h", str(original_path)],

@@ -27,12 +27,8 @@ class LinkerExecutor:
         self.report_file = self.metadata_dir / "execution_report.json"
         self.broken_mods_log = self.metadata_dir / "brokenmods_logs.txt"
 
-        # DEFECT-02: injected per-game protected prefixes; fallback is the single game-agnostic entry
         self._protected_data_prefixes = protected_data_prefixes if protected_data_prefixes is not None else ["data/update"]
 
-    # ------------------------------------------------------------------
-    # FIX-02: Hardlink helper with mandatory inode validation
-    # ------------------------------------------------------------------
     def _hardlink_verified(self, source: Path, target: Path) -> str:
         """
         Creates a hardlink from source to target and verifies via inode match.
@@ -47,14 +43,13 @@ class LinkerExecutor:
 
         try:
             os.link(src_lp, dst_lp)
-            # Inode validation — FIX-02
             src_ino = src_lp.stat().st_ino
             dst_ino = dst_lp.stat().st_ino
             if src_ino == dst_ino:
                 audit_logger.info("HARDLINK OK | inode=%d | %s", src_ino, target)
                 return "hardlink"
             else:
-                # Pseudo-hardlink detected (FAT32, cross-volume, AV interference)
+                # Pseudo-hardlink: same-name link created but inodes differ (AV, FAT32, cross-volume)
                 dst_lp.unlink(missing_ok=True)
                 audit_logger.warning(
                     "PSEUDO-HARDLINK DETECTED | src_ino=%d dst_ino=%d | %s "
@@ -70,9 +65,6 @@ class LinkerExecutor:
             shutil.copy2(src_lp, dst_lp)
             return "copy_fallback_oserror"
 
-    # ------------------------------------------------------------------
-    # FEAT-05: Deploy base game files with inode-verified hardlinks
-    # ------------------------------------------------------------------
     def deploy_base_game(self, base_mapping: dict, progress_callback=None) -> int:
         """
         Hardlinks base game files (from scan_base_game output) into the standalone root.
@@ -116,9 +108,6 @@ class LinkerExecutor:
         logger.info("Base game deploy complete. %d linked, %d skipped.", deployed_count, total - deployed_count)
         return deployed_count
 
-    # ------------------------------------------------------------------
-    # FIX-05: Orphan cleanup — preview + confirm before any deletion
-    # ------------------------------------------------------------------
     def get_orphan_list(self, manifest_keys: set) -> list:
         """
         Returns list of Path objects in standalone that are not in manifest_keys
@@ -150,16 +139,16 @@ class LinkerExecutor:
 
     def clean_orphaned_files(self, removed_keys: set = None, confirm_callback=None):
         """
-        FIX-05: Collects orphan list, calls confirm_callback(count) for user confirmation,
-        then deletes. Every deletion is logged. Errors are logged, never silently skipped.
+        Collects orphaned files, asks for user confirmation, then deletes them.
+        Every deletion is logged. Errors are logged, never silently skipped.
 
-        FEAT-15/v3.4 — Surgical mode: if removed_keys is provided, bypass the recursive
-        os.walk entirely and delete only those specific target files.
+        If removed_keys is provided, only those specific target paths are deleted
+        (surgical mode — bypasses the full recursive os.walk).
 
         confirm_callback(count) -> bool: True = proceed, False = abort.
-        If no callback provided this method is a no-op (no silent deletion).
+        If no callback is provided this method is a no-op — no silent deletion.
         """
-        # --- FEAT-15/v3.4: Surgical orphan cleanup (delta-driven) ---
+        # --- Surgical mode: delete specific keys without a full directory walk ---
         if removed_keys is not None:
             if not removed_keys:
                 logger.info("Surgical orphan cleanup: no removed keys — nothing to delete.")
@@ -184,14 +173,14 @@ class LinkerExecutor:
             logger.info("Surgical orphan cleanup complete: %d of %d files deleted.", deleted, len(removed_keys))
             return
 
-        # --- Legacy mode: recursive walk (FIX-05 preserved) ---
+        # --- Legacy mode: recursive walk ---
         if not self.manifest_file.exists():
             return
 
         if confirm_callback is None:
             logger.warning(
                 "clean_orphaned_files called without confirm_callback — "
-                "no files deleted (FIX-05 safety guard)."
+                "no files deleted (safety guard: requires explicit user confirmation)."
             )
             return
 
@@ -209,7 +198,6 @@ class LinkerExecutor:
             logger.info("Orphan cleanup: no orphaned files found.")
             return
 
-        # FIX-05: Show preview count and require user confirmation
         if not confirm_callback(len(orphans)):
             logger.info("Orphan cleanup cancelled by user (%d files).", len(orphans))
             return
@@ -226,9 +214,6 @@ class LinkerExecutor:
 
         logger.info("Orphan cleanup complete: %d of %d files deleted.", deleted, len(orphans))
 
-    # ------------------------------------------------------------------
-    # Core deployment loop (V3 preserved — FIX-02 + v3.4 Inode Fast-Path + v3.6 Tier 2/3)
-    # ----------------------------------------------------------------
     def execute_mapping(self, clean=False, confirm_orphan_callback=None, progress_callback=None,
                         tick_callback=None, start_index=0, paranoid_mode=False):
         if clean:
@@ -238,7 +223,6 @@ class LinkerExecutor:
             logger.error("Manifest not found: %s", self.manifest_file)
             return
 
-        # ARCH-03: validate manifest version on load
         with open(self.manifest_file, "r") as f:
             raw_manifest = json.load(f)
 
@@ -279,8 +263,7 @@ class LinkerExecutor:
             target_rel_path = info.get("preferred_path", target_key)
             target_full_path = Path(ensure_long_path(self.standalone_path / target_rel_path))
 
-            # FEAT-15/v3.4: Tier 1 — Inode Fast-Path
-            # Skip if target is already the correct hardlink (same inode == same physical data).
+            # Tier 1: skip if target is already the correct hardlink (same inode = same data).
             if target_full_path.exists() and target_full_path.is_file():
                 try:
                     target_stat = target_full_path.stat()
@@ -338,7 +321,6 @@ class LinkerExecutor:
 
                 target_full_path.parent.mkdir(parents=True, exist_ok=True)
 
-                # FIX-02: use verified hardlink helper — never silent
                 if source_path.anchor.lower() == self.standalone_path.anchor.lower():
                     method = self._hardlink_verified(source_path, target_full_path)
                 else:
@@ -366,11 +348,9 @@ class LinkerExecutor:
                     log.write("-" * 40 + "\n")
                 audit_logger.error("DEPLOY FAIL | %s | %s", target_rel_path, error_msg)
 
-            # FIX-03: checkpoint tick on every deployed file
             if tick_callback:
                 tick_callback(i)
 
-            # Granular progress — every 50 files (FEAT-07 preserved from V3)
             if progress_callback and (i % 50 == 0 or i == total - 1):
                 progress_callback(int(((i + 1) / total) * 100))
 
@@ -397,9 +377,6 @@ class LinkerExecutor:
         except Exception as e:
             logger.warning("Failed to copy metadata: %s", e)
 
-    # ------------------------------------------------------------------
-    # v3.7 TASK-A04: Action Queue Executor (Event-Driven phased execution)
-    # ------------------------------------------------------------------
     def execute_action_queue(
         self,
         action_queue: list,
@@ -407,22 +384,19 @@ class LinkerExecutor:
         tick_callback=None,
     ) -> dict:
         """
-        v3.7: Executes an Action Queue produced by LayeredManifest.compute_action_queue().
+        Executes an Action Queue produced by LayeredManifest.compute_action_queue().
 
-        Execution is strictly phased (TD-05):
+        Execution is strictly phased:
           Phase 1: All DELETE operations  (unlink existing targets)
           Phase 2: All LINK operations    (force-overwrite hardlinks)
 
-        Idempotency guarantee (TD-06):
+        Both phases are idempotent:
           - DELETE: target.unlink(missing_ok=True) — safe if already absent.
-          - LINK:   target unlinked via missing_ok=True, then _hardlink_verified().
-                    Executing the same LINK twice on NTFS is a no-op (same inode).
+          - LINK:   target is unlinked first, then a verified hardlink is created.
+                    Re-running the same LINK on NTFS is safe (same inode is produced).
 
-        Path 2 Safety Exception — Bounded inode verification (CDC-IMPL-002-v0.7 DEC-004):
-          _hardlink_verified() performs 2 stat calls per LINK (src + dst inode) to
-          detect pseudo-hardlinks and log fallbacks. This is intentional CON-007
-          Level 1 compliance — every hardlink-to-copy fallback must be logged.
-          The v0.6 "zero stat" claim was incorrect and is removed here.
+        _hardlink_verified() performs 2 stat calls per LINK (src + dst) to detect
+        pseudo-hardlinks and log copy fallbacks. Every fallback is written to the audit log.
 
         Locked-file OS errors are logged and counted but do NOT halt execution.
 
@@ -447,8 +421,8 @@ class LinkerExecutor:
 
         if not action_queue:
             logger.info("execute_action_queue: empty queue — nothing to do.")
-            # Write a fresh empty report so downstream HTML generation cannot
-            # inherit stale prior-run deployment data (FMN-PLAN v0.3 / TC-R01).
+            # Write a fresh empty report so downstream HTML generation does not
+            # inherit stale data from a previous run.
             try:
                 with open(self.report_file, "w", encoding="utf-8") as f:
                     json.dump({}, f, indent=4)
@@ -479,7 +453,7 @@ class LinkerExecutor:
                 report[preferred_path] = {
                     "status": "DELETED",
                     "method": "unlink",
-                    "mod": "Action Queue (v3.7)",
+                    "mod": "Action Queue",
                 }
             except OSError as e:
                 # File is locked or inaccessible — log, do not halt
@@ -504,11 +478,8 @@ class LinkerExecutor:
             try:
                 target_full.parent.mkdir(parents=True, exist_ok=True)
 
-                # Force-overwrite: unlink existing target without pre-check stat (DEC-005).
-                # unlink(missing_ok=True) is a no-op when the target is absent.
+                # Force-overwrite: unlink first (no-op if absent), then create fresh hardlink.
                 target_full.unlink(missing_ok=True)
-
-                # Create hardlink (cross-drive falls back to copy — FIX-02 preserved)
                 if source_path.anchor.lower() == self.standalone_path.anchor.lower():
                     method = self._hardlink_verified(source_path, target_full)
                 else:
@@ -521,7 +492,7 @@ class LinkerExecutor:
                 report[preferred_path] = {
                     "status": "SUCCESS",
                     "method": method,
-                    "mod": "Action Queue (v3.7)",
+                    "mod": "Action Queue",
                 }
 
             except OSError as e:
@@ -557,11 +528,8 @@ class LinkerExecutor:
 
         return result
 
-    # ------------------------------------------------------------------
-    # TASK-A06: Force-deploy standalone_generated_files regardless of MO2 state
-    # ------------------------------------------------------------------
-    # Allowlist: only these extensions are permitted through the override.
-    # .log is deliberately NOT included (it is also excluded by TASK-A01).
+    # Allowlist for the generated-files override pass.
+    # .log is intentionally excluded — these files should never be deployed.
     _OVERRIDE_ALLOWLIST = {".dll", ".exe", ".ini", ".json", ".txt"}
 
     def deploy_generated_overrides(
@@ -571,20 +539,20 @@ class LinkerExecutor:
         progress_callback=None,
     ) -> dict:
         """
-        TASK-A06: Hardlinks all allowlisted files from standalone_generated_files into
-        the standalone build, regardless of MO2 checkbox state.
+        Hardlinks all allowlisted files from standalone_generated_files into the
+        standalone build, regardless of MO2 mod checkbox state.
         Returns a summary dict: {deployed: int, skipped: int, failed: int, files: list}
         """
         result = {"deployed": 0, "skipped": 0, "failed": 0, "files": []}
 
         if not generated_files_path or not generated_files_path.exists():
             logger.warning(
-                "TASK-A06: standalone_generated_files path not found: %s — skipping override pass.",
+                "standalone_generated_files path not found: %s — skipping override pass.",
                 generated_files_path,
             )
             return result
 
-        logger.info("TASK-A06: Override pass — scanning: %s", generated_files_path)
+        logger.info("Override pass — scanning: %s", generated_files_path)
         candidate_files = list(generated_files_path.rglob("*"))
         total = sum(1 for f in candidate_files if f.is_file())
 
@@ -625,7 +593,7 @@ class LinkerExecutor:
                 })
             except Exception as e:
                 audit_logger.error("OVERRIDE FAIL | %s | %s", rel, e)
-                logger.error("TASK-A06: Override deploy failed for %s: %s", rel, e)
+                logger.error("Override deploy failed for %s: %s", rel, e)
                 result["failed"] += 1
                 result["files"].append({
                     "path": str(rel),
@@ -639,7 +607,7 @@ class LinkerExecutor:
                 progress_callback(int(((i + 1) / total) * 100))
 
         logger.info(
-            "TASK-A06: Override pass complete — deployed=%d skipped=%d failed=%d",
+            "Override pass complete — deployed=%d skipped=%d failed=%d",
             result["deployed"], result["skipped"], result["failed"],
         )
         return result

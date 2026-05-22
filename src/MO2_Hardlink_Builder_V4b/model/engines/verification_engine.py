@@ -10,9 +10,6 @@ from .path_utils import ensure_long_path
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# V3 PRESERVED — VerificationEngine (full check: existence, configs, saves)
-# ---------------------------------------------------------------------------
 class VerificationEngine:
     def __init__(self):
         self.results = {
@@ -271,11 +268,10 @@ class VerificationEngine:
         return self.results["mod_audit"]
 
     def verify_save_artifacts(self, game_saves_path, game_not_running=True):
-        """TASK-S05: Detect leftover wrapper-owned backup artifacts in the live saves folder.
-
-        When the game is not running and the tool has completed its cycle,
-        no *.bak_standalone files should remain. Their presence indicates an
-        incomplete or failed cleanup cycle and is treated as a save issue.
+        """
+        Detects leftover .bak_standalone backup artifacts in the live saves folder.
+        These are created by the launcher before injecting saves and removed on clean exit.
+        If the game is not running and backups still exist, the cleanup cycle was incomplete.
         """
         if not game_not_running or not game_saves_path:
             return
@@ -294,7 +290,7 @@ class VerificationEngine:
                     "missing_files": leftovers,
                 })
                 logger.warning(
-                    "TASK-S05: %d leftover .bak_standalone artifact(s) in %s",
+                    "%d leftover .bak_standalone artifact(s) found in %s",
                     len(leftovers), saves_dir,
                 )
         except Exception as e:
@@ -336,10 +332,6 @@ class VerificationEngine:
         return self.results
 
 
-# ---------------------------------------------------------------------------
-# FEAT-02: TieredVerificationEngine — Quick + Sampled + Full
-# Wraps the existing VerificationEngine, adds hash-based checks.
-# ---------------------------------------------------------------------------
 class TieredVerificationEngine:
     """
     Tiered verification policy:

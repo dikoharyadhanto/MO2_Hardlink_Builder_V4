@@ -1,6 +1,6 @@
 """
-FEAT-01: EnvironmentSensor — pre-flight environment checks before deployment.
-Detects: OneDrive sync conflict, Windows Defender CFA blocking target, PID locks on game files.
+Pre-flight environment checks before deployment.
+Detects: OneDrive sync conflicts, Windows Defender CFA blocking the target, PID locks on game files.
 """
 import logging
 import os
@@ -30,8 +30,8 @@ class SensorResult:
 
 class EnvironmentSensor:
     """
-    FEAT-01: Checks the deployment target for environmental blockers before deployment starts.
-    Returns a SensorResult — callers must pause on any conflict and offer Retry/Abort.
+    Checks the deployment target for environmental blockers before deployment starts.
+    Returns a SensorResult — callers should pause on any conflict and offer Retry/Abort.
     """
 
     def __init__(self, target_path: str, game_path: str = None):

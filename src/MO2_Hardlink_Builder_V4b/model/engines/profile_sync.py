@@ -127,7 +127,7 @@ class ProfileSync:
         """
         Syncs files from src_dir → dst_dir.
 
-        FEAT-13: Conflicting files are ALWAYS moved to a timestamped quarantine folder.
+        Conflicting files are always moved to a timestamped quarantine folder.
         There is no overwrite option — this prevents any silent data loss.
         New (non-conflicting) files are copied normally.
         """
@@ -149,7 +149,7 @@ class ProfileSync:
             else:
                 new_files.append(item)
 
-        # FEAT-13: always quarantine conflicts, never prompt-to-overwrite
+        # Always quarantine conflicts rather than overwriting
         quarantine_dir = None
         if conflicts:
             quarantine_dir = dst_dir / f"{quarantine_base_name}_{self.run_timestamp}"

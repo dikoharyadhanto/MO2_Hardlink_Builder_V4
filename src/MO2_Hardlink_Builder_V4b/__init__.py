@@ -17,7 +17,7 @@ class HardlinkBuilderPlugin(mobase.IPluginTool):
         return "MO2 Hardlink Builder"
 
     def author(self):
-        return "Antigravity & User"
+        return "Vladmir74"
 
     def description(self):
         return "Creates a standalone, portable game installation using Hardlinks."

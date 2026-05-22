@@ -1,7 +1,7 @@
 """
-ARCH-02: Game profile abstraction.
-Loads game-specific strings from game_profiles.json at runtime.
-No hardcoded game names in engine files.
+Game profile abstraction.
+Loads game-specific configuration from game_profiles.json at runtime.
+No game names are hardcoded in engine files.
 """
 import json
 import logging
@@ -25,7 +25,7 @@ class GameProfile:
     delta_rebuild_threshold: float = 0.70
     known_loaders: List[str] = field(default_factory=list)
     protected_data_subdirs: List[str] = field(default_factory=list)
-    # Universal Wrapper Control Flags (added for non-Bethesda game support)
+    # Save path routing for non-Bethesda games:
     # save_path_mode: "MyGames" | "SavedGames" | "Documents" | "None"
     #   MyGames    → Documents\My Games\{docs_name}\Saves  (Bethesda standard)
     #   SavedGames → %USERPROFILE%\Saved Games\{save_path_custom}  (e.g. Cyberpunk)
@@ -44,11 +44,11 @@ class DeploymentConfig:
     use_hardlinks: bool = True
     use_stealth: bool = True
     use_documents_mode: bool = False
-    # TASK-A02: When True, disables Tier 2 (size+mtime) fast-path and forces
-    # hash escalation on any inode mismatch. Prevents false-positives from spoofed mtimes.
+    # When True, disables Tier 2 (size+mtime) fast-path and forces hash escalation on any
+    # inode mismatch. Prevents false-positives from spoofed or unreliable mtimes.
     paranoid_mode: bool = False
-    # TASK-A04: When True, shows a post-build dialog offering to open the HTML report.
-    # Set to False via "Don't show again" toggle to suppress for automation users.
+    # When True, shows a post-build dialog offering to open the HTML report.
+    # Set to False via the "Don't show again" toggle to suppress for automation users.
     show_report_prompt: bool = True
 
 

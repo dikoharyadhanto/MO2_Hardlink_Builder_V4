@@ -1,10 +1,13 @@
 """
-FIX-03: DeploymentTransactionManager — checkpoint-based recovery.
-FEAT-15: ManifestDeltaAnalyzer — delta threshold to decide full vs incremental rebuild.
-v3.7 — LayeredManifest: two-layer Event-Driven state machine manifest.
-         Layer A: mod_index  → {mod_name: {files: {rel_key: {size, mtime, source, preferred_path, is_root}}, root_mtime, meta_mtime, file_count}}
-         Layer B: path_owners → {virtual_path_key: [mod_name_highest_priority, ..., mod_name_lowest]}
-         Invariant: path_owners[key][0] == active_owner (top of stack = winner).
+Deployment state management: checkpoint recovery, delta analysis, and the layered manifest.
+
+DeploymentTransactionManager — checkpoint-based recovery for interrupted deployments.
+ManifestDeltaAnalyzer — compares manifests to decide between full rebuild and incremental update.
+LayeredManifest — two-layer manifest kept in RAM:
+    Layer A (mod_index):  mod_name → {files: {rel_key: {size, mtime, source, preferred_path, is_root}},
+                                       root_mtime, meta_mtime, file_count}
+    Layer B (path_owners): virtual_path_key → [mod_name_highest_priority, ..., mod_name_lowest]
+    Invariant: path_owners[key][0] == active_owner (top of stack = winner).
 """
 import hashlib
 import json
@@ -15,13 +18,13 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 STATE_FILE_NAME = ".deployment_state"
-CHECKPOINT_INTERVAL = 500  # FIX-03: checkpoint every 500 files
+CHECKPOINT_INTERVAL = 500  # checkpoint every 500 files
 
 
 class DeploymentTransactionManager:
     """
-    FIX-03: Writes a .deployment_state file before the deployment loop begins.
-    Checkpoints every CHECKPOINT_INTERVAL files.
+    Writes a .deployment_state file before the deployment loop begins.
+    Checkpoints every CHECKPOINT_INTERVAL files processed.
     On clean completion, removes the state file.
     On restart with an incomplete state file, callers can query and offer Resume/Rebuild.
     """
@@ -113,8 +116,8 @@ class DeploymentTransactionManager:
 
 class ManifestDeltaAnalyzer:
     """
-    FEAT-15: Compares a new scan manifest against the previous deployment state
-    to determine whether to do a full rebuild or incremental deploy.
+    Compares a new scan manifest against the previous deployment manifest to determine
+    whether to perform a full rebuild or an incremental deploy.
     Threshold is configurable per game profile (default 70%).
     """
 
@@ -144,7 +147,7 @@ class ManifestDeltaAnalyzer:
               "delta_ratio": float,
               "added": int,
               "removed": int,
-              "removed_keys": set,  # FEAT-15/v3.4: actual key strings for surgical orphan cleanup
+              "removed_keys": set,  # actual key strings for targeted orphan cleanup
               "unchanged": int,
               "threshold": float,
             }
@@ -194,16 +197,16 @@ class ManifestDeltaAnalyzer:
 
 
 # ---------------------------------------------------------------------------
-# v3.7 — LayeredManifest (Event-Driven State Machine)
+# LayeredManifest
 # ---------------------------------------------------------------------------
 # Schema version embedded in every serialised manifest.
-# Mismatch on load triggers forced full-rebuild (TR-03 mitigation).
+# A version mismatch on load triggers a forced full rebuild.
 LAYERED_MANIFEST_VERSION = 1
 
 
 class LayeredManifest:
     """
-    v3.7 Two-layer manifest loaded entirely in RAM.
+    Two-layer manifest held entirely in RAM.
 
     Layer A  (mod_index):
         mod_name -> {
@@ -215,11 +218,11 @@ class LayeredManifest:
 
     Layer B  (path_owners):
         virtual_path_key -> [mod_high_prio, ..., mod_low_prio]
-        path_owners[key][0] is ALWAYS the active (winning) owner.
+        path_owners[key][0] is always the active (winning) owner.
 
-    Invariant check on load:  path_owners[key][0] == the mod that currently
+    Invariant check on load: path_owners[key][0] must match the mod that currently
     provides that virtual path as the highest-priority owner.
-    A mismatch means the manifest is corrupt — build must be aborted.
+    A mismatch indicates a corrupt manifest — the build must be aborted.
     """
 
     def __init__(self):
@@ -235,8 +238,8 @@ class LayeredManifest:
     # ------------------------------------------------------------------
     def save(self, manifest_path) -> None:
         """
-        Atomically writes the two-layer manifest as JSON using a .tmp + os.replace().
-        Compatible with the existing atomic-write pattern (TASK-A02, v3.6).
+        Atomically writes the two-layer manifest as JSON using a .tmp file + os.replace().
+        The atomic rename prevents a partially written file from being read on crash.
         """
         path = Path(manifest_path)
         tmp = path.with_suffix(".json.tmp")
@@ -272,10 +275,10 @@ class LayeredManifest:
         with open(path, "r", encoding="utf-8") as f:
             raw = json.load(f)
 
-        # TR-03: schema version guard — old flat manifest rejected explicitly
+        # Schema version guard — old flat manifests are rejected explicitly
         if not isinstance(raw, dict) or "mod_index" not in raw or "path_owners" not in raw:
             raise ValueError(
-                "LayeredManifest: incompatible schema detected (v3.6 flat format or corrupt). "
+                "LayeredManifest: incompatible or corrupt schema detected. "
                 "A full rebuild is required to regenerate the manifest."
             )
 
@@ -291,7 +294,7 @@ class LayeredManifest:
         instance.path_owners = raw["path_owners"]
         instance._rebuild_active_map()
 
-        # Invariant check on load (TD-02)
+        # Invariant check on load
         violations = instance._check_invariant()
         if violations:
             sample = ", ".join(list(violations)[:5])
@@ -355,8 +358,8 @@ class LayeredManifest:
 
     def full_recompute_layer_b(self, load_order: list) -> None:
         """
-        Pure RAM recompute of Layer B from Layer A when the load order changes (TASK-A02).
-        Does NOT touch the filesystem.
+        Recomputes Layer B (path_owners) entirely from Layer A (mod_index) in RAM.
+        Called when the load order changes. Does NOT touch the filesystem.
 
         Args:
             load_order: Active mod names ordered low→high priority

@@ -1,6 +1,6 @@
 """
-FEAT-03: Crash logger for worker thread unhandled exceptions.
-The crash logger MUST never raise its own exception — all operations are wrapped.
+Crash logger for worker thread unhandled exceptions.
+This module must never raise its own exceptions — all operations are wrapped.
 """
 import logging
 import platform
@@ -23,7 +23,7 @@ def write_crash_log(
     Writes a crash_log_<timestamp>.txt file.
     Returns the path to the written log, or None if write failed.
 
-    FEAT-03 contract: this function NEVER raises. All errors are suppressed.
+    This function never raises. All errors are suppressed.
     """
     try:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -82,7 +82,6 @@ def write_crash_log(
         return str(log_path)
 
     except Exception:
-        # FEAT-03: crash logger NEVER raises
         return None
 
 
@@ -113,7 +112,6 @@ def crash_safe(func):
                 elif hasattr(self, "progress_signal"):
                     self.progress_signal.emit(msg)
             except Exception:
-                # FEAT-03: never propagate
                 pass
 
     return wrapper

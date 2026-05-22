@@ -1,7 +1,7 @@
 """
-ARCH-01: View layer — Standalone Manager tab (Tab 2 in V4b).
+View layer — Standalone Manager tab (Tab 2).
 Pure UI — no business logic.
-UX-02: Paths in metadata display are clickable (setOpenExternalLinks).
+Paths in the metadata display are clickable via setOpenExternalLinks.
 """
 from ..qt_compat import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
@@ -10,10 +10,7 @@ from ..qt_compat import (
 
 
 class ManagerTab(QWidget):
-    """
-    Tab 2: Standalone Manager — list of registered builds + metadata display.
-    UX-02: Metadata display has setOpenExternalLinks(True) for clickable paths.
-    """
+    """Tab 2: Standalone Manager — list of registered builds with metadata display."""
 
     def __init__(self):
         super().__init__()
@@ -65,7 +62,6 @@ class ManagerTab(QWidget):
 
         self.metadata_display = QTextBrowser()
         self.metadata_display.setReadOnly(True)
-        # UX-02: clickable file:/// links
         self.metadata_display.setOpenExternalLinks(True)
         self.metadata_display.setStyleSheet(
             "QTextBrowser { background-color: #121212; color: #E0E0E0; "

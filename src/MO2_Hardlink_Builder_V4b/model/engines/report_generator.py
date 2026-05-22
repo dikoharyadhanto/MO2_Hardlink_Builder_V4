@@ -15,8 +15,8 @@ class ReportGenerator:
     def generate(self, verification_results=None, show_deployment=True,
                  override_results=None, build_strategy=None):
         """
-        TASK-A03: Generates the HTML report with three explicit categories:
-          Unchanged, Excluded, Override, Failed (and Success / hardlinked).
+        Generates the HTML build report.
+        Categorises every deployment entry as: Unchanged, Excluded, Override, Failed, or Success.
         override_results: optional dict from linker.deploy_generated_overrides()
         """
         execution = {}
@@ -42,12 +42,9 @@ class ReportGenerator:
         now = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
         category_label = "Update Rebuild" if build_strategy == "INCREMENTAL" else "Full Build"
 
-        # ------------------------------------------------------------------
-        # TASK-A03: Categorise every entry explicitly
-        # Categories: unchanged, excluded, override, success, failed, deleted
+        # Categorise every entry.
         # Each row: [target, cat_int, m_int, mod, display_label, reason]
         #   cat_int: 0=failed, 1=success, 2=unchanged, 3=excluded, 4=override, 5=deleted
-        # ------------------------------------------------------------------
         unchanged_list = []
         excluded_list  = []
         override_list  = []
@@ -304,7 +301,6 @@ class ReportGenerator:
                     """)
                 html_chunks.append('</div></div>')
 
-        # TASK-A06: override summary notice
         if total_override > 0:
             html_chunks.append(f"""
         <div class="override-box">

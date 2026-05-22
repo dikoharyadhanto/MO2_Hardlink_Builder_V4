@@ -1,6 +1,5 @@
 """
-ARCH-01: MVC Controller layer.
-Bridges model engines ↔ view panels.
+MVC Controller layer — bridges model engines with view panels.
 Contains: HardlinkBuilderDialog, BuildWorker, CleanWorker, UpdateCheckWorker,
           SynchronousMessenger.
 """
@@ -41,7 +40,7 @@ _REGISTRY_FILE = Path(__file__).parent.parent / "standalone_registry.json"
 # Logging setup: called once when the plugin loads
 # ---------------------------------------------------------------------------
 def _configure_logging():
-    """Configures file logging (ARCH-04). Idempotent — safe to call multiple times."""
+    """Configures file logging. Idempotent — safe to call multiple times."""
     root = logging.getLogger()
     if root.handlers:
         return
@@ -76,11 +75,11 @@ except Exception:
 
 def _flat_manifest_from_layered(layered_manifest, output_path):
     """
-    TASK-A02: Derives mapping_manifest.json from LayeredManifest._active_map.
-    Called in the INCREMENTAL fast-path to skip build_mapping() entirely.
-    Produces a flat dict compatible with legacy reporting and LinkerExecutor.
-    Note: only winning-mod entries are included (no conflict data) — flat
-    manifest is a reporting artifact; layered manifest is the authority.
+    Derives mapping_manifest.json from LayeredManifest._active_map.
+    Called on the incremental fast-path to skip a full build_mapping() scan.
+    Produces a flat dict compatible with reporting and LinkerExecutor.
+    Only winning-mod entries are included — the layered manifest is authoritative;
+    the flat manifest is a reporting artifact.
     """
     mapping = {}
     for path_key, entry in layered_manifest._active_map.items():
@@ -93,7 +92,7 @@ def _flat_manifest_from_layered(layered_manifest, output_path):
             "preferred_path": entry.get("preferred_path", path_key),
         }
     payload = {
-        "version":       3,   # MANIFEST_VERSION from scanner_engine
+        "version":       3,   # must match MANIFEST_VERSION in scanner_engine
         "mapping":       mapping,
         "scan_failures": {},
         "folder_states": {},
@@ -137,7 +136,7 @@ class SynchronousMessenger(QObject):
 
 
 # ---------------------------------------------------------------------------
-# UpdateCheckWorker (FEAT-14)
+# UpdateCheckWorker
 # ---------------------------------------------------------------------------
 class UpdateCheckWorker(QThread):
     update_signal = pyqtSignal(str, str)  # (new_version, nexus_url)
@@ -153,7 +152,7 @@ class UpdateCheckWorker(QThread):
             if self._is_newer(remote, self._current):
                 self.update_signal.emit(remote, NEXUS_MOD_URL)
         except Exception:
-            pass  # FEAT-14: silent fail on network error
+            pass  # silent fail on network error — update check is non-critical
 
     @staticmethod
     def _is_newer(remote: str, local: str) -> bool:
@@ -164,7 +163,7 @@ class UpdateCheckWorker(QThread):
 
 
 # ---------------------------------------------------------------------------
-# CleanWorker (FEAT-06)
+# CleanWorker
 # ---------------------------------------------------------------------------
 class CleanWorker(QThread):
     progress_signal = pyqtSignal(str)
@@ -216,7 +215,7 @@ class CleanWorker(QThread):
             self.finished_signal.emit(False, f"Safety Block: {msg}")
             return
 
-        # FEAT-12: sync saves BEFORE deletion
+        # Sync saves back to MO2 before deleting standalone contents
         self.progress_signal.emit("[*] Save Sync: syncing saves to MO2 before clean...")
         try:
             p_sync = ProfileSync(
@@ -300,7 +299,7 @@ class BuildWorker(QThread):
         )
         from ..model.state import DeploymentTransactionManager, ManifestDeltaAnalyzer, LayeredManifest
 
-        self.progress_signal.emit(f"[*] Build started using {QT_NAME}...")
+        self.progress_signal.emit(f"[*] Build started ({QT_NAME})...")
 
         # --- Gather MO2 API info ---
         mo2_path = Path(self.organizer.basePath())
@@ -313,7 +312,6 @@ class BuildWorker(QThread):
 
         self.progress_signal.emit(f"[*] Game: {game_name} | Profile: {self.profile_name}")
 
-        # ARCH-02: load game profile (no hardcoded strings)
         game_profile = get_profile_for_game(game_name)
         docs_name = game_profile.docs_name
         appdata_name = game_profile.appdata_name
@@ -321,7 +319,7 @@ class BuildWorker(QThread):
         steam_appid = game_profile.steam_appid
         known_loaders = game_profile.known_loaders
 
-        # FEAT-0X: Safety check - Prevent cross-contamination between different games/profiles
+        # Safety check — prevent cross-contamination between different games or profiles
         metadata_file = self.sa_path / "standalone_metadata" / "standalone_metadata.json"
         if metadata_file.exists():
             try:
@@ -351,7 +349,6 @@ class BuildWorker(QThread):
             except Exception as e:
                 self.progress_signal.emit(f"[!] Warning: Failed to read standalone metadata for safety check: {e}")
 
-        # FEAT-01: Pre-flight environment sensing
         self.progress_signal.emit("[*] Stage 0: Pre-flight environment check...")
         sensor = EnvironmentSensor(str(self.sa_path), str(game_path))
         sensor_result = sensor.run_all()
@@ -374,7 +371,7 @@ class BuildWorker(QThread):
 
         # ================================================================
         # STAGE 1 — Verification & Strategy
-        # Pre-checks, harvest, manifest rotation, preliminary build strategy
+        # Safety checks, file harvest, manifest rotation, preliminary strategy
         # ================================================================
         self.progress_signal.emit("[*] Stage 1: Verification & strategy...")
         self.clean_bar_signal.emit(5)
@@ -424,7 +421,7 @@ class BuildWorker(QThread):
                 logger.warning("S1 strategy estimation failed: %s — defaulting to INCREMENTAL.", e)
                 build_strategy = "INCREMENTAL"
 
-        # FEAT-16: Harvest generated files BEFORE any potential wipe, using current manifest
+        # Harvest gameplay-generated files before any potential wipe
         harvest_result = cleaner.harvest_generated_files(str(current_manifest))
         if harvest_result["harvested"] > 0:
             self.progress_signal.emit(
@@ -484,10 +481,9 @@ class BuildWorker(QThread):
 
         # ================================================================
         # STAGE 3 — Scan & Deploy Routing
-        # TASK-A02: INCREMENTAL + valid layered_manifest.json → skip legacy
-        # build_mapping(), call tri-gate builder directly (V07-FIND-002 fix).
-        # FRESH / FULL_REBUILD / schema-mismatch fallback → legacy build_mapping()
-        # then build layered manifest for future incremental runs.
+        # INCREMENTAL + valid layered manifest → skip full scan, use tri-gate builder directly.
+        # FRESH / FULL_REBUILD / schema-mismatch → full build_mapping() scan,
+        # then save a new layered manifest for future incremental runs.
         # ================================================================
         self.progress_signal.emit("[*] Stage 3: Scan routing...")
         self.scan_bar_signal.emit(5)
@@ -508,10 +504,10 @@ class BuildWorker(QThread):
                 _layered_manifest_prev = LayeredManifest.load(str(layered_manifest_file))
                 _use_incremental_fast_path = True
                 self.progress_signal.emit(
-                    f"[*] S3: INCREMENTAL (tri-gate) — valid layered manifest found "
+                    f"[*] S3: INCREMENTAL — valid layered manifest found "
                     f"({len(_layered_manifest_prev.mod_index) - 1} mods, "
                     f"{len(_layered_manifest_prev.path_owners)} paths). "
-                    "Skipping legacy full scan."
+                    "Skipping full scan."
                 )
             except (FileNotFoundError, ValueError) as e:
                 if "invariant violation" in str(e).lower():
@@ -527,10 +523,10 @@ class BuildWorker(QThread):
                     )
                     return
                 else:
-                    # Schema mismatch (TR-03) — fall back to legacy full scan.
+                    # Schema version mismatch — fall back to a full scan for this run.
                     self.progress_signal.emit(
                         f"[!] S3: Layered manifest schema mismatch ({e}). "
-                        "Falling back to legacy full scan for this run."
+                        "Falling back to full scan for this run."
                     )
                     _layered_manifest_prev = None
 
@@ -628,7 +624,7 @@ class BuildWorker(QThread):
             # STAGE 3b — Build LayeredManifest from full scan
             # Saves layered_manifest.json for future incremental runs.
             # ================================================================
-            self.progress_signal.emit("[*] Stage 3b: Building v3.7 Layered Manifest (full scan)...")
+            self.progress_signal.emit("[*] Stage 3b: Building Layered Manifest (full scan)...")
 
             # Delete stale layered manifest before full/fresh rebuild
             if layered_manifest_file.exists():
@@ -672,7 +668,6 @@ class BuildWorker(QThread):
         self.progress_signal.emit("[*] Stage 4: Deploying files...")
         self.link_bar_signal.emit(5)
 
-        # FEAT-05: Base game hardlinking before mod deployment
         self.progress_signal.emit("[*] S4: Hardlinking base game files...")
         base_mapping = scanner.scan_base_game(game_path)
         deployed_base = linker.deploy_base_game(base_mapping)
@@ -681,14 +676,12 @@ class BuildWorker(QThread):
         else:
             self.progress_signal.emit(f"[*] S4: Base game — {deployed_base} files linked (out of {len(base_mapping)} scanned).")
 
-        # FIX-03: Transaction state (resume from checkpoint support)
         tx_manager = DeploymentTransactionManager(str(self.sa_path))
 
         if _action_queue is not None:
-            # ---- v3.7: Action Queue path (INCREMENTAL + tri-gate) ----
-            # Phase 1 (DELETE) + Phase 2 (LINK) with zero os.stat in execution.
+            # Phased execution: all DELETEs first, then all LINKs.
             tx_manager.begin(str(scanner.output_manifest))
-            self.progress_signal.emit("[*] S4: Executing Action Queue (v3.7 phased executor)...")
+            self.progress_signal.emit("[*] S4: Executing Action Queue (phased: DELETE then LINK)...")
 
             aq_result = linker.execute_action_queue(
                 action_queue=_action_queue,
@@ -744,7 +737,7 @@ class BuildWorker(QThread):
         self.link_bar_signal.emit(95)
         self.progress_signal.emit("[*] S4: Main deployment complete.")
 
-        # TASK-A06: Override pass — standalone_generated_files (runs AFTER main pass so overrides win)
+        # Override pass — standalone_generated_files (runs after main pass so overrides win)
         generated_files_path = mods_path / "standalone_generated_files"
         override_result = linker.deploy_generated_overrides(
             generated_files_path=generated_files_path,
@@ -809,11 +802,9 @@ class BuildWorker(QThread):
         # Feature generation
         self.progress_signal.emit("[*] S5: Generating metadata & wrapper files...")
 
-        # FEAT-09: steam_appid.txt
         write_steam_appid(str(self.sa_path), steam_appid)
         self.progress_signal.emit(f"[*] steam_appid.txt written: {steam_appid}")
 
-        # FEAT-10: EXE wrapping
         if build_strategy != "INCREMENTAL":
             wrap_result = wrap_loaders(
                 str(self.sa_path), 
@@ -835,7 +826,6 @@ class BuildWorker(QThread):
             self.progress_signal.emit("[*] S5: EXE wrapping bypassed (Incremental).")
             wrap_result = {"hijacked": 0, "exe_wrappers": 1, "bat_wrappers": 0}
 
-        # FEAT-08: HOW TO LAUNCH.txt
         write_launch_instructions(
             str(self.sa_path), self.profile_name, game_name,
             known_loaders, docs_name=docs_name, use_stealth=True,
@@ -877,7 +867,7 @@ class BuildWorker(QThread):
         with open(metadata_dir / "standalone_metadata.json", "w", encoding="utf-8") as f:
             json.dump(metadata, f, indent=4)
 
-        # Post-build tiered verification (FEAT-02: Quick + Sampled auto)
+        # Post-build tiered verification: Quick (size+mtime) + Sampled (5% SHA-256)
         quick_r = {"checked": 0, "missing": [], "mismatches": []}
         sampled_r = {"checked": 0, "missing": [], "hash_mismatches": []}
 
@@ -924,7 +914,6 @@ class BuildWorker(QThread):
                 report_path=str(report_path),
                 output_html=str(output_html)
             )
-            # TASK-A02: Atomic manifest write — write to .tmp, then os.replace() atomically
             tmp_manifest = metadata_dir / "mapping_manifest.json.tmp"
             try:
                 import shutil as _shutil2
@@ -934,7 +923,6 @@ class BuildWorker(QThread):
             except Exception as _me:
                 logger.warning("S5: Atomic manifest swap failed (non-fatal): %s", _me)
 
-            # TASK-A03/A06: pass override results so report knows about override files
             gen.generate(
                 verification_results=v3_results,
                 show_deployment=True,
@@ -971,7 +959,6 @@ class HardlinkBuilderDialog(QDialog):
 
         self._init_ui()
 
-        # FEAT-14: update check on startup
         self._update_worker = UpdateCheckWorker(CURRENT_VERSION)
         self._update_worker.update_signal.connect(self._show_update_notification)
         self._update_worker.start()
@@ -990,7 +977,7 @@ class HardlinkBuilderDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setSpacing(8)
 
-        # FEAT-14: update banner (hidden by default)
+        # Update banner — hidden until an update is detected
         self.update_banner = QLabel("")
         try:
             self.update_banner.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -1011,11 +998,9 @@ class HardlinkBuilderDialog(QDialog):
         self.tabs = QTabWidget()
         layout.addWidget(self.tabs)
 
-        # Tab 1: Builder (ARCH-01: view panel)
         self.builder_tab = BuilderTab(organizer=self.organizer)
         self.tabs.addTab(self.builder_tab, "1. Builder")
 
-        # Tab 2: Standalone Manager (ARCH-01: view panel)
         self.manager_tab = ManagerTab()
         self.tabs.addTab(self.manager_tab, "2. Standalone Manager")
 
@@ -1026,8 +1011,8 @@ class HardlinkBuilderDialog(QDialog):
         bt.dest_edit.textChanged.connect(self._validate_drives)
         bt.dest_edit.textChanged.connect(self._validate_report_button)
         bt.btn_build.clicked.connect(self._start_build)
-        bt.btn_clean_standalone.clicked.connect(self._start_clean)  # FEAT-06
-        bt.btn_show_report.clicked.connect(self._open_build_report)  # TASK-A04
+        bt.btn_clean_standalone.clicked.connect(self._start_clean)
+        bt.btn_show_report.clicked.connect(self._open_build_report)
 
         # Connect manager tab signals
         mt = self.manager_tab
@@ -1146,7 +1131,7 @@ class HardlinkBuilderDialog(QDialog):
             bt.btn_build.setEnabled(True)
 
     # ------------------------------------------------------------------
-    # UX-01: Cross-drive warning
+    # Cross-drive warning
     # ------------------------------------------------------------------
     def _validate_drives(self):
         bt = self.builder_tab
@@ -1228,7 +1213,6 @@ class HardlinkBuilderDialog(QDialog):
             bt.btn_show_report.setEnabled(bool(report_html))
             self._refresh_standalone_list()
 
-            # TASK-A04: Post-build prompt (unless suppressed by "Don't show again")
             if bt.cb_show_report_prompt.isChecked() and report_html:
                 from ..qt_compat import QCheckBox as _QCB
                 prompt = QMessageBox(self)
@@ -1255,7 +1239,6 @@ class HardlinkBuilderDialog(QDialog):
         self._append_log(f"\n{'[SUCCESS]' if success else '[FAILED]'} {message}")
 
     def _open_build_report(self):
-        """TASK-A04: Open build report from Show Report button."""
         report_html = getattr(self._build_worker, '_last_report_html', '') if self._build_worker else ''
         if not report_html:
             # Fallback: try to find report in registered standalone path
@@ -1268,7 +1251,6 @@ class HardlinkBuilderDialog(QDialog):
         self._open_report_path(report_html)
 
     def _open_report_path(self, path: str):
-        """TASK-A04: Open an HTML path in the default browser."""
         if path and Path(path).exists():
             try:
                 os.startfile(path)
@@ -1280,7 +1262,7 @@ class HardlinkBuilderDialog(QDialog):
 
 
     def _start_clean(self):
-        """FEAT-06: Clean Standalone button — deletes contents, no rebuild."""
+        """Deletes all contents of the standalone folder without triggering a rebuild."""
         bt = self.builder_tab
         sa_path = bt.dest_edit.text().strip()
         if not sa_path:
@@ -1347,7 +1329,7 @@ class HardlinkBuilderDialog(QDialog):
         self.messenger.set_result(res == QMessageBox.StandardButton.Yes)
 
     # ------------------------------------------------------------------
-    # FEAT-14: Update notification banner
+    # Update notification banner
     # ------------------------------------------------------------------
     def _show_update_notification(self, new_version: str, url: str):
         self._update_url = url
@@ -1432,7 +1414,6 @@ class HardlinkBuilderDialog(QDialog):
             try:
                 with open(metadata_file, "r", encoding="utf-8") as f:
                     meta = json.load(f)
-                # UX-02: render paths as clickable file:/// links
                 html = self._render_metadata_html(meta)
                 mt.metadata_display.setHtml(html)
                 return
@@ -1445,7 +1426,7 @@ class HardlinkBuilderDialog(QDialog):
         )
 
     def _render_metadata_html(self, meta: dict) -> str:
-        """UX-02: Renders metadata with clickable file:/// links."""
+        """Renders the metadata dict as HTML with clickable file:/// links."""
         lines = ["<html><body style='font-family:Consolas,monospace;color:#E0E0E0;'>"]
 
         def _section(title, data):

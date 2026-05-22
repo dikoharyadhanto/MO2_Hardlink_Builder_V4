@@ -10,7 +10,7 @@ from .state_manager import ConflictManager, ModlistSnapshot, hash_modlist
 
 logger = logging.getLogger(__name__)
 
-# Version written into every manifest. ARCH-03: mismatch on load forces fresh scan.
+# Version written into every manifest. A mismatch on load triggers a fresh full scan.
 MANIFEST_VERSION = 3
 
 # Subtree cache schema version stored in each mod's Layer A entry.
@@ -55,9 +55,6 @@ class ScannerEngine:
         self.failed_mods: dict = {}
         self.conflict_manager = ConflictManager(self.metadata_dir)
 
-    # ------------------------------------------------------------------
-    # FIX-01: Load order from mobase API — no heuristic fallback allowed
-    # ------------------------------------------------------------------
     def _get_active_mods(self, organizer=None):
         """
         Returns active mod names in priority order (low→high).
@@ -67,7 +64,6 @@ class ScannerEngine:
         there is NO silent fallback to keyword guessing.
         """
         if organizer is None:
-            # TOOL_FAULT: mobase IOrganizer not provided — cannot resolve load order via API
             raise RuntimeError(
                 "API Link Failure: mobase organizer not provided to ScannerEngine. "
                 "Cannot determine load order without the MO2 API."
@@ -91,20 +87,17 @@ class ScannerEngine:
             logger.info("mobase API returned %d active mods.", len(active_mods))
             return active_mods
         except Exception as e:
-            # TOOL_FAULT: mobase API call failed at runtime
             raise RuntimeError(f"API Link Failure: mobase modList() call failed — {e}") from e
 
-    # TASK-A01: Directories excluded from ALL traversals (exact case-insensitive name match).
-    # "backup_old" does NOT match "backup" — exact equality only.
+    # Directories excluded from all traversals — exact case-insensitive name match.
+    # "backup_old" does NOT match "backup"; partial substrings are intentionally not excluded.
     _EXCLUDED_DIRS = {"logs", "backup"}
-    # TASK-A01: File extensions excluded from ALL traversals.
+    # File extensions excluded from all traversals.
     _EXCLUDED_EXTENSIONS = {".log"}
 
     def _scan_folder(self, folder_path, mod_name, mapping_table):
         try:
             for root, dirs, files in os.walk(folder_path):
-                # TASK-A01: Prune excluded dirs + existing blacklist in one pass.
-                # Using exact name equality (lower()) — partial substrings like "backup_old" pass through.
                 dirs[:] = [
                     d for d in dirs
                     if d.lower() not in self.blacklist_dirs
@@ -114,7 +107,6 @@ class ScannerEngine:
                 for file_name in files:
                     ext = Path(file_name).suffix.lower()
 
-                    # TASK-A01: Skip .log files and existing blacklisted files/extensions
                     if (file_name.lower() in self.blacklist_files
                             or ext in self.blacklist_extensions
                             or ext in self._EXCLUDED_EXTENSIONS):
@@ -164,7 +156,7 @@ class ScannerEngine:
     def build_mapping(self, organizer=None, progress_callback=None):
         """
         Scans all active mods and writes mapping_manifest.json.
-        organizer must be supplied — FIX-01 enforces API-based load order.
+        organizer must be supplied — load order is read exclusively from the MO2 API.
         """
         active_mods = self._get_active_mods(organizer)
         mapping_table: dict = {}
@@ -190,7 +182,6 @@ class ScannerEngine:
             logger.info("Scanning Overwrite folder (Ghost Mods)...")
             self._scan_folder(self.overwrite_dir, "Overwrite", mapping_table)
 
-        # ARCH-03: version field in manifest
         output_data = {
             "version": MANIFEST_VERSION,
             "mapping": mapping_table,
@@ -211,9 +202,6 @@ class ScannerEngine:
 
         logger.info("Manifest & Metadata saved to: %s", self.metadata_dir)
 
-    # ------------------------------------------------------------------
-    # FEAT-05: Scan base game files (executables, DLLs, root assets)
-    # ------------------------------------------------------------------
     def scan_base_game(self, game_path):
         """
         Scans the base game directory for executables, DLLs, vanilla Data/ assets,
@@ -225,7 +213,6 @@ class ScannerEngine:
             logger.warning("Base game path does not exist: %s", game_path)
             return {}
 
-        # Base-game scan exclusions: static base dirs + TASK-A01 shared exclusion set
         excluded_dirs = {"mods", "_commonredist"} | self._EXCLUDED_DIRS
         base_mapping: dict = {}
 
@@ -239,7 +226,6 @@ class ScannerEngine:
                     continue
 
                 if item.is_file():
-                    # TASK-A01: skip .log files at root level
                     if item.suffix.lower() in self._EXCLUDED_EXTENSIONS:
                         continue
                     try:
@@ -257,10 +243,8 @@ class ScannerEngine:
                     for sub_item in item.rglob("*"):
                         if not sub_item.is_file():
                             continue
-                        # TASK-A01: prune any sub-path that passes through an excluded dir
                         if any(p.lower() in self._EXCLUDED_DIRS for p in sub_item.parts):
                             continue
-                        # TASK-A01: skip .log files in subdirs
                         if sub_item.suffix.lower() in self._EXCLUDED_EXTENSIONS:
                             continue
                         if True:
@@ -281,7 +265,7 @@ class ScannerEngine:
         return base_mapping
 
     # ==================================================================
-    # v3.7 — Tri-Gate Dirty Detection + Layered Manifest Builder
+    # Tri-Gate Dirty Detection + Layered Manifest Builder
     # ==================================================================
 
     def _gate2_compute_fingerprint(self, folder: Path) -> tuple:
@@ -289,12 +273,9 @@ class ScannerEngine:
         Single-pass walk: counts deployable files AND computes a metadata fingerprint.
         Fingerprint = SHA-256 of sorted "path_key|mtime|size" lines.
 
-        PERFORMANCE NOTE — ANT Safety Exception (CDC-IMPL-002-v0.7 DEC-003):
-        This is a full metadata traversal — O(N) stat calls where N is the number
-        of deployable files in the mod folder. This is a correctness-over-speed
-        tradeoff. The prior _count_deployable_files() performed the same O(N)
-        os.walk; this method replaces it without adding an extra filesystem pass.
-        Gate 2 cost is O(mods × files) across the full modlist.
+        This is a full metadata traversal — O(N) stat calls where N is the number of
+        deployable files in the folder. Gate 2 cost is O(mods × files) across the modlist,
+        but it replaces the prior _count_deployable_files() without adding a second pass.
 
         Returns: (file_count: int, fingerprint_hex: str)
         """
@@ -731,7 +712,7 @@ class ScannerEngine:
         max_workers: int = 4,
     ):
         """
-        v3.7 Main entry point: Event-Driven Incremental build using tri-gate detection.
+        Builds a LayeredManifest using tri-gate dirty detection (incremental when possible).
 
         Returns a LayeredManifest fully populated in RAM (Layer A + B).
         Does NOT write to disk — caller is responsible for calling manifest.save().
@@ -741,16 +722,16 @@ class ScannerEngine:
             prev_manifest:     LayeredManifest from the previous build (or None for fresh).
                                If None — full scan of all mods.
             progress_callback: Optional callable(pct: int).
-            max_workers:       Threads for Gate 3 parallel scanning.
+            max_workers:       Thread count for Gate 3 parallel scanning.
 
         Raises:
-            RuntimeError: If the load order cannot be determined (FIX-01).
+            RuntimeError: If the load order cannot be determined from the MO2 API.
         """
         from ..state import LayeredManifest
 
         t_total_start = time.perf_counter()
 
-        active_mods = self._get_active_mods(organizer)   # FIX-01: API-only
+        active_mods = self._get_active_mods(organizer)
         total = len(active_mods)
         load_order = active_mods  # low→high priority order
 
@@ -928,8 +909,8 @@ class ScannerEngine:
                     if not stack:
                         new_manifest.path_owners.pop(path_key, None)
 
-            # TASK-A01: Second pass — insert new virtual paths introduced by dirty mods
-            # that were absent from prev Layer B (V07-FIND-001 fix).
+            # Second pass — insert new virtual paths introduced by dirty mods
+            # that were absent from the previous Layer B.
             new_paths_added = 0
             for mod_name_d, _mf, _ds in dirty_mods:
                 dirty_entry = new_manifest.mod_index.get(mod_name_d, {})
@@ -951,7 +932,7 @@ class ScannerEngine:
 
             if new_paths_added:
                 logger.info(
-                    "TASK-A01: %d new virtual path(s) inserted from dirty mods into Layer B.",
+                    "%d new virtual path(s) inserted from dirty mods into Layer B.",
                     new_paths_added,
                 )
 

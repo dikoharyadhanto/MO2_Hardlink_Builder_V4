@@ -1,5 +1,5 @@
 """
-ARCH-01: View layer — Tab 1 configuration panel (no business logic).
+View layer — Tab 1 configuration panel (no business logic).
 Contains only Qt widget creation and layout code.
 """
 from pathlib import Path
@@ -120,7 +120,6 @@ class BuilderTab(QWidget):
         dest_row.addWidget(self.btn_browse_dest)
         layout.addLayout(dest_row)
 
-        # UX-01: Cross-drive warning label
         self.drive_warning = QLabel()
         self.drive_warning.setWordWrap(True)
         self.drive_warning.setStyleSheet(
@@ -137,7 +136,6 @@ class BuilderTab(QWidget):
         options_row.addWidget(self.cb_hardlinks)
         options_row.addStretch()
 
-        # FEAT-06: Clean Standalone button (red)
         self.btn_clean_standalone = QPushButton("Clean Standalone")
         self.btn_clean_standalone.setStyleSheet(
             "background-color: #D32F2F; color: white; "
@@ -210,7 +208,6 @@ class BuilderTab(QWidget):
         )
         layout.addWidget(self.btn_build)
 
-        # TASK-A04: Show Report button (Standalone Manager Tab row)
         report_row = QHBoxLayout()
         self.btn_show_report = QPushButton("Show Build Report")
         self.btn_show_report.setStyleSheet(
@@ -223,14 +220,12 @@ class BuilderTab(QWidget):
         report_row.addWidget(self.btn_show_report)
         report_row.addStretch()
 
-        # TASK-A04: "Don't show again" checkbox for post-build prompt
         self.cb_show_report_prompt = QCheckBox("Prompt to view report after build")
         self.cb_show_report_prompt.setChecked(True)
         self.cb_show_report_prompt.setStyleSheet("font-size: 12px; color: #AAA;")
         report_row.addWidget(self.cb_show_report_prompt)
         layout.addLayout(report_row)
 
-        # UX-03: Qt framework + version footer
         footer_row = QHBoxLayout()
         self.lbl_footer = QLabel(
             f"<small>Framework: {QT_NAME} | MO2 Hardlink Builder V4b</small>"

@@ -6,7 +6,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# Version written into every new conflict cache. FIX-04: version mismatch forces rebuild.
+# Version written into every new conflict cache. A mismatch on load forces a full rebuild.
 CACHE_VERSION = 2
 
 
@@ -77,8 +77,7 @@ class ConflictManager:
     """
     Manages conflict_cache.json.
     Maps: file_path -> list of mod names that provide that file.
-
-    FIX-04: Validates cache version on load; rebuilds if corrupt or version mismatch.
+    Validates the cache version on load and rebuilds if corrupt or outdated.
     """
 
     def __init__(self, metadata_path):
@@ -98,7 +97,6 @@ class ConflictManager:
             self.mapping = {}
             return
 
-        # FIX-04: version field required; mismatch = rebuild
         if not isinstance(raw, dict):
             logger.warning("Conflict cache has unexpected format — rebuilding.")
             self.mapping = {}
@@ -155,9 +153,6 @@ class ConflictManager:
         return best_mod
 
 
-# ---------------------------------------------------------------------------
-# v3.7 — Utility: hash modlist.txt content for Gate 1 detection
-# ---------------------------------------------------------------------------
 def hash_modlist(modlist_path) -> str:
     """
     Returns the SHA-256 hex digest of modlist.txt, or empty string on error.
@@ -175,19 +170,12 @@ def hash_modlist(modlist_path) -> str:
         return ""
 
 
-# ---------------------------------------------------------------------------
-# v3.7 — OwnerStackManager: Layer B stack mutation methods
-# ---------------------------------------------------------------------------
 class OwnerStackManager:
     """
     Manages Layer B (path_owners) mutations on a LayeredManifest in RAM.
 
-    HOTFIX (ANT QA REJECTION):
-      The original _get_priority() returned 0 for all mods, making push_owner
-      non-deterministic on incremental runs when Gate 1 (load order unchanged)
-      was stable.  That fallback is eliminated.  The caller MUST inject a valid
-      load_order_dict at construction time.  No priority lookup ever defaults to
-      a dummy value.
+    Requires a valid load_order_dict at construction time. Every priority lookup
+    uses this dict — no defaults or fallbacks are permitted.
 
     Contract:
       load_order_dict: {mod_name: int}
@@ -195,8 +183,8 @@ class OwnerStackManager:
         Higher index == higher priority (wins conflicts).
         Stack index 0 == winning owner (highest priority).
 
-    Callers that hold a live load_order_dict must call update_load_order()
-    if the load order changes mid-session before issuing any push/reorder call.
+    Callers must call update_load_order() before issuing push/reorder calls
+    if the active load order changes mid-session.
     """
 
     def __init__(self, manifest, load_order_dict: dict):
@@ -286,7 +274,7 @@ class OwnerStackManager:
         """
         Removes mod_name from the owner stack for path_key.
 
-        If mod_name is not present, this is a no-op (TR-04 safety).
+        If mod_name is not present, this is a no-op.
         If the stack becomes empty the path_key is deleted from both
         path_owners and _active_map.
 
@@ -349,8 +337,7 @@ class OwnerStackManager:
             Set of path_keys with invariant violations.
             Empty set → manifest is consistent.
 
-        Callers MUST abort the build on a non-empty result
-        (ANT-STR-005-v3.7 rollback protocol).
+        Callers MUST abort the build on a non-empty result — the manifest is corrupt.
         """
         return self._manifest._check_invariant()
 
@@ -362,10 +349,8 @@ class OwnerStackManager:
         Returns the load-order priority index for mod_name from the injected dict.
 
         Raises:
-            KeyError: if mod_name is not in the dict.
-                      This is intentional — a missing mod_name means the caller
-                      passed a stale or incomplete load_order_dict.
-                      Silent fallbacks are strictly prohibited (ANT QA directive).
+            KeyError: if mod_name is not in the dict — the caller passed a stale
+                      or incomplete load_order_dict. No silent fallback is permitted.
         """
         if mod_name not in self._priority:
             raise KeyError(
